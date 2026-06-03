@@ -42,6 +42,26 @@ class GenerationRequest(BaseModel):
     generation_policy: GenerationPolicy = Field(default_factory=GenerationPolicy, alias="generationPolicy")
 
 
+class WorkItemRelation(BaseModel):
+    rel: str
+    url: str
+    name: str = ""
+
+
+class WorkItemResponse(BaseModel):
+    id: int
+    work_item_type: str = Field(alias="workItemType")
+    state: str
+    title: str
+    description: str = ""
+    acceptance_criteria: str = Field(default="", alias="acceptanceCriteria")
+    area_path: str = Field(default="", alias="areaPath")
+    iteration_path: str = Field(default="", alias="iterationPath")
+    priority: int | None = None
+    parent_id: int | None = Field(default=None, alias="parentId")
+    relations: list[WorkItemRelation] = Field(default_factory=list)
+
+
 class TestStep(BaseModel):
     action: str
     expected_result: str = Field(alias="expectedResult")
@@ -89,4 +109,3 @@ class ImportResponse(BaseModel):
     status: str
     message: str
     created_test_cases: list[ImportedTestCase] = Field(alias="createdTestCases")
-

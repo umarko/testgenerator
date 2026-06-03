@@ -2,6 +2,9 @@ from app.models import GenerationRequest, GenerationResponse, TestCase, TestStep
 
 
 def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
+    if _is_wise_transfer_story(request):
+        return _generate_wise_transfer_tests(request)
+
     policy = request.generation_policy
     coverage = policy.coverage
     tests: list[TestCase] = []
@@ -303,6 +306,189 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
     )
 
 
+def _is_wise_transfer_story(request: GenerationRequest) -> bool:
+    context = f"{request.story.title}\n{request.story.acceptance_criteria}".lower()
+    return "wise" in context and ("currency" in context or "currencies" in context)
+
+
+def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationResponse:
+    policy = request.generation_policy
+    tests = [
+        _test_case(
+            "Verify Wise country list contains only supported countries",
+            "High",
+            "Positive",
+            ["User is authenticated", "International transfer flow is available"],
+            [
+                ("Open international transfer country selection", "Country selection is displayed"),
+                (
+                    "Review available Wise-supported countries",
+                    "Only Switzerland, United Kingdom and United States are available for Wise flow",
+                ),
+            ],
+        ),
+        _test_case(
+            "Verify local currency is applied for Switzerland Wise transfer",
+            "High",
+            "Positive",
+            ["User is authenticated", "Switzerland is selected as destination country"],
+            [
+                ("Select Switzerland as destination country", "Currency is set to CHF"),
+                ("Enter valid amount in CHF", "Amount is accepted for Wise eligibility check"),
+            ],
+        ),
+        _test_case(
+            "Verify local currency is applied for United Kingdom Wise transfer",
+            "High",
+            "Positive",
+            ["User is authenticated", "United Kingdom is selected as destination country"],
+            [
+                ("Select United Kingdom as destination country", "Currency is set to GBP"),
+                ("Enter valid amount in GBP", "Amount is accepted for Wise eligibility check"),
+            ],
+        ),
+        _test_case(
+            "Verify local currency is applied for United States Wise transfer",
+            "High",
+            "Positive",
+            ["User is authenticated", "United States is selected as destination country"],
+            [
+                ("Select United States as destination country", "Currency is set to USD"),
+                ("Enter valid amount in USD", "Amount is accepted for Wise eligibility check"),
+            ],
+        ),
+        _test_case(
+            "Verify unsupported country cannot be selected for Wise transfer",
+            "High",
+            "Negative",
+            ["User is authenticated", "International transfer flow is available"],
+            [
+                ("Attempt to select a country outside Switzerland, United Kingdom and United States", "Country is not available for Wise or Wise eligibility is not offered"),
+                ("Continue transfer setup", "User cannot proceed through Wise flow for unsupported country"),
+            ],
+        ),
+        _test_case(
+            "Verify mismatched country and currency combination is rejected",
+            "High",
+            "Negative",
+            ["User is authenticated", "Wise country and currency fields are visible"],
+            [
+                ("Select Switzerland and attempt to use currency other than CHF", "Currency mismatch is prevented or validation message is displayed"),
+                ("Attempt to continue", "System does not confirm Wise eligibility for mismatched input"),
+            ],
+        ),
+        _test_case(
+            "Verify Wise eligibility is confirmed based on country, currency and amount",
+            "High",
+            "Positive",
+            ["User is authenticated", "Supported country and matching currency are selected"],
+            [
+                ("Enter valid country, currency and amount", "Input fields are accepted"),
+                ("Trigger eligibility check or continue transfer setup", "System confirms transaction eligibility for Wise"),
+            ],
+        ),
+        _test_case(
+            "Verify amount is mandatory for Wise eligibility confirmation",
+            "High",
+            "Negative",
+            ["User is authenticated", "Supported country and matching currency are selected"],
+            [
+                ("Leave amount empty", "Amount field is marked as required"),
+                ("Attempt to continue", "Wise eligibility is not confirmed without amount"),
+            ],
+        ),
+        _test_case(
+            "Verify Commission OUR becomes read-only after IBAN is entered",
+            "Medium",
+            "Regression",
+            ["User is authenticated", "International transfer form is open"],
+            [
+                ("Enter a valid IBAN", "IBAN is accepted"),
+                ("Attempt to change Commission OUR field", "Commission OUR is clearly labeled as fixed and cannot be modified"),
+            ],
+        ),
+        _test_case(
+            "Verify Currency becomes read-only after IBAN is entered",
+            "High",
+            "Regression",
+            ["User is authenticated", "International transfer form is open"],
+            [
+                ("Enter a valid IBAN", "IBAN is accepted"),
+                ("Attempt to change Currency field", "Currency is clearly labeled as fixed and cannot be modified"),
+            ],
+        ),
+        _test_case(
+            "Verify Value date becomes read-only after IBAN is entered",
+            "Medium",
+            "Regression",
+            ["User is authenticated", "International transfer form is open"],
+            [
+                ("Enter a valid IBAN", "IBAN is accepted"),
+                ("Attempt to change Value date field", "Value date is clearly labeled as fixed and cannot be modified"),
+            ],
+        ),
+        _test_case(
+            "Verify fixed fields are visually clear after IBAN entry",
+            "Medium",
+            "Positive",
+            ["User is authenticated", "A valid IBAN has been entered"],
+            [
+                ("Review Commission OUR, Currency and Value date fields", "All fixed fields are visibly disabled or marked as non-editable"),
+                ("Review helper text or labels", "User understands why the fields cannot be changed"),
+            ],
+        ),
+        _test_case(
+            "Verify UI instructions guide the user through Wise transfer setup",
+            "Low",
+            "Positive",
+            ["User is authenticated", "Wise transfer flow is available"],
+            [
+                ("Open each step of the transfer process", "Instructions are visible and clear for country, currency, amount and IBAN entry"),
+                ("Review validation and eligibility messages", "Messages are understandable and consistent with the selected inputs"),
+            ],
+        ),
+        _test_case(
+            "Verify auditability of Wise eligibility decision",
+            "Medium",
+            "Audit",
+            ["Audit logging is enabled", "Wise eligibility check is performed"],
+            [
+                ("Complete Wise eligibility check with valid input", "Eligibility result is displayed"),
+                ("Check audit record", "Audit record contains country, currency, amount, user, timestamp and eligibility result"),
+            ],
+        ),
+        _test_case(
+            "Verify Wise flow handles service unavailable response",
+            "High",
+            "Negative",
+            ["User is authenticated", "Wise eligibility service is unavailable"],
+            [
+                ("Enter valid Wise input data", "Input fields are accepted"),
+                ("Trigger eligibility check", "Clear service unavailable message is displayed and no false eligibility confirmation is shown"),
+            ],
+        ),
+    ]
+
+    selected_tests = tests[: policy.max_test_cases]
+
+    return GenerationResponse(
+        sourceWorkItemId=request.azure.story_id,
+        summary=f"Generated Wise transfer manual test coverage for: {request.story.title}",
+        assumptions=[
+            "Wise eligibility is determined by country, currency and amount.",
+            "Supported country/currency pairs are Switzerland/CHF, United Kingdom/GBP and United States/USD.",
+            "Commission OUR, Currency and Value date become fixed after IBAN entry.",
+        ],
+        questionsForBA=[
+            "What are the amount limits for Wise eligibility per currency?",
+            "Should unsupported countries be hidden or visible with a disabled Wise option?",
+            "What exact message should be shown when Wise eligibility service is unavailable?",
+        ],
+        testCases=selected_tests,
+        generationSource="azure-devops-context-mock",
+    )
+
+
 def _test_case(
     title: str,
     priority: str,
@@ -322,4 +508,3 @@ def _test_case(
         coverage=[category],
         tags=["manual", category.lower(), "backend-mock"],
     )
-
