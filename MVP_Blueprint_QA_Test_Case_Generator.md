@@ -92,6 +92,64 @@ Najveci gubitak vremena nije samo pisanje, vec ponavljanje istog misaonog proces
    - Za MVP moze biti lokalna SQLite baza ili jednostavna server baza.
    - Cuva generisane predloge, status, import rezultat i osnovni audit trag.
 
+### Buduci Figma design context
+
+Figma ne treba da bude tretirana kao samostalan izvor za generisanje testova. Sama Figma daje UI strukturu, ali obicno ne daje dovoljno poslovnog konteksta, pravila validacije, redosled flow-a i sistemska ocekivanja.
+
+Buduci Figma modul treba da dopuni, a ne zameni, Azure DevOps user story.
+
+Predlozeni AI kontekst:
+
+```json
+{
+  "storyContext": {
+    "id": 12345,
+    "title": "...",
+    "description": "...",
+    "acceptanceCriteria": "..."
+  },
+  "designContext": {
+    "enabled": true,
+    "figmaLinks": [],
+    "screens": [
+      {
+        "name": "Domestic payment form",
+        "role": "Form",
+        "order": 1,
+        "detectedElements": ["Amount", "Beneficiary account", "Reference", "Continue"],
+        "qaNotes": "Amount is mandatory. Beneficiary account must be a valid domestic account."
+      }
+    ]
+  },
+  "businessRules": [],
+  "generationPolicy": {
+    "domain": "fintech",
+    "testStyle": "manual"
+  }
+}
+```
+
+Figma treba da pomogne za:
+
+- UI coverage,
+- screen coverage,
+- field coverage,
+- button/action coverage,
+- error/empty/loading state coverage,
+- confirmation screen validation,
+- consistency between user story and visible UI.
+
+Za kvalitetne testove i dalje su potrebni:
+
+- user story,
+- acceptance criteria,
+- QA flow notes,
+- business rules,
+- field-level validation rules,
+- security/audit expectations.
+
+Backend treba od pocetka da ima mesto za `designContext`, cak i dok je u prvom MVP-u prazan ili iskljucen.
+
 ## 5. Predlozeni tehnoloski stack
 
 ### Najprakticniji MVP stack
@@ -558,4 +616,3 @@ MVP je gotov kada:
 - Kao sistem, zelim da sacuvam created Azure Test Case ID-eve.
 - Kao sistem, zelim da prijavim greske pri importu.
 - Kao admin, zelim da znam koji story je bio izvor za svaki generisani test.
-

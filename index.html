@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>QA Test Case Generator</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Workspace">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">QA</div>
+          <div>
+            <h1>Test Generator</h1>
+            <p>Azure DevOps MVP</p>
+          </div>
+        </div>
+
+        <nav class="steps" aria-label="MVP flow">
+          <button class="step is-active" type="button" data-step="source">
+            <span>1</span>
+            Source
+          </button>
+          <button class="step" type="button" data-step="review">
+            <span>2</span>
+            Review
+          </button>
+          <button class="step" type="button" data-step="import">
+            <span>3</span>
+            Import
+          </button>
+        </nav>
+
+        <section class="sidebar-panel">
+          <h2>Coverage</h2>
+          <label><input type="checkbox" id="includePositive" checked> Positive</label>
+          <label><input type="checkbox" id="includeNegative" checked> Negative</label>
+          <label><input type="checkbox" id="includeBoundary" checked> Boundary</label>
+          <label><input type="checkbox" id="includeSecurity" checked> Security</label>
+          <label><input type="checkbox" id="includeAudit" checked> Audit</label>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Manual QA copilot</p>
+            <h2>Generate test cases from a user story</h2>
+          </div>
+          <div class="status-pill" id="appStatus">Draft</div>
+        </header>
+
+        <section class="panel source-panel" id="sourcePanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Azure DevOps source</h3>
+              <p>First MVP screen with mock data until the API connector is added.</p>
+            </div>
+          </div>
+
+          <form class="source-form" id="sourceForm">
+            <label>
+              Organization
+              <input id="organization" name="organization" type="text" value="umarko" autocomplete="off">
+            </label>
+            <label>
+              Project
+              <input id="project" name="project" type="text" value="testgenerator" autocomplete="off">
+            </label>
+            <label>
+              User Story ID
+              <input id="storyId" name="storyId" type="number" value="12345" min="1">
+            </label>
+            <label>
+              Test Plan ID
+              <input id="testPlanId" name="testPlanId" type="number" value="1001" min="1">
+            </label>
+            <label>
+              Test Suite ID
+              <input id="testSuiteId" name="testSuiteId" type="number" value="2001" min="1">
+            </label>
+            <label>
+              Max test cases
+              <input id="maxTestCases" name="maxTestCases" type="number" value="8" min="3" max="20">
+            </label>
+          </form>
+
+          <div class="story-preview">
+            <div>
+              <span class="field-label">Story title</span>
+              <input id="storyTitle" type="text" value="As a retail user, I want to create a domestic payment">
+            </div>
+            <div>
+              <span class="field-label">Acceptance criteria</span>
+              <textarea id="acceptanceCriteria" rows="7">User can create a domestic payment with valid beneficiary account, amount and reference.
+Mandatory fields are validated before submission.
+User receives a confirmation screen after successful submission.
+Payment is not submitted when balance is insufficient.
+All payment creation attempts are auditable.</textarea>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary-action" id="generateButton" type="button">Generate tests</button>
+            <button class="secondary-action" id="resetButton" type="button">Reset draft</button>
+          </div>
+        </section>
+
+        <section class="panel review-panel is-hidden" id="reviewPanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Review test cases</h3>
+              <p>Edit generated tests before import.</p>
+            </div>
+            <button class="secondary-action" id="addTestButton" type="button">Add test case</button>
+          </div>
+
+          <div class="insight-grid">
+            <div>
+              <h4>Assumptions</h4>
+              <ul id="assumptionsList"></ul>
+            </div>
+            <div>
+              <h4>Questions for BA</h4>
+              <ul id="questionsList"></ul>
+            </div>
+          </div>
+
+          <div class="test-list" id="testList"></div>
+
+          <div class="actions">
+            <button class="secondary-action" id="backToSourceButton" type="button">Back</button>
+            <button class="primary-action" id="mockImportButton" type="button">Mock import</button>
+          </div>
+        </section>
+
+        <section class="panel import-panel is-hidden" id="importPanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Import result</h3>
+              <p>Mock result for the MVP UI. Azure write integration comes next.</p>
+            </div>
+          </div>
+          <div class="result-summary" id="resultSummary"></div>
+          <div class="result-list" id="resultList"></div>
+          <div class="actions">
+            <button class="secondary-action" id="backToReviewButton" type="button">Back to review</button>
+            <button class="secondary-action" id="downloadJsonButton" type="button">Download JSON</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <template id="testCaseTemplate">
+      <article class="test-card">
+        <div class="test-card-header">
+          <input class="test-title" type="text" aria-label="Test title">
+          <button class="icon-button delete-test" type="button" aria-label="Delete test case">X</button>
+        </div>
+        <div class="test-meta">
+          <label>
+            Priority
+            <select class="test-priority">
+              <option>High</option>
+              <option>Medium</option>
+              <option>Low</option>
+            </select>
+          </label>
+          <label>
+            Category
+            <select class="test-category">
+              <option>Positive</option>
+              <option>Negative</option>
+              <option>Boundary</option>
+              <option>Security</option>
+              <option>Audit</option>
+              <option>Regression</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Preconditions
+          <textarea class="test-preconditions" rows="3"></textarea>
+        </label>
+        <div class="steps-block">
+          <div class="steps-heading">
+            <h4>Steps</h4>
+            <button class="secondary-action add-step" type="button">Add step</button>
+          </div>
+          <div class="steps-list"></div>
+        </div>
+      </article>
+    </template>
+
+    <template id="stepTemplate">
+      <div class="step-row">
+        <textarea class="step-action" rows="2" aria-label="Step action"></textarea>
+        <textarea class="step-expected" rows="2" aria-label="Expected result"></textarea>
+        <button class="icon-button delete-step" type="button" aria-label="Delete step">X</button>
+      </div>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
