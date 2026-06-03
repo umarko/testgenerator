@@ -4,8 +4,11 @@ const state = {
   questions: [],
   testCases: [],
   source: {},
-  expandedTestIndex: null
+  expandedTestIndex: null,
+  generationSource: "frontend-fallback"
 };
+
+const API_BASE_URL = "http://127.0.0.1:8000/api";
 
 const elements = {
   appStatus: document.querySelector("#appStatus"),
@@ -359,8 +362,83 @@ function createBaseTests(source) {
   return tests.slice(0, source.maxTestCases);
 }
 
-function generateTests() {
+async function generateTests() {
   state.source = readSource();
+  elements.generateButton.disabled = true;
+  elements.generateButton.textContent = "Generating...";
+
+  try {
+    const response = await requestBackendGeneration(state.source);
+    applyGenerationResponse(response);
+  } catch (error) {
+    console.warn("Backend generation unavailable, using frontend fallback.", error);
+    applyFrontendGenerationFallback();
+  } finally {
+    elements.generateButton.disabled = false;
+    elements.generateButton.textContent = "Generate tests";
+  }
+
+  state.expandedTestIndex = null;
+  renderReview();
+  setStep("review");
+}
+
+async function requestBackendGeneration(source) {
+  const response = await fetch(`${API_BASE_URL}/generations/mock`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      azure: {
+        organization: source.organization,
+        project: source.project,
+        storyId: source.storyId,
+        testPlanId: source.testPlanId,
+        testSuiteId: source.testSuiteId
+      },
+      story: {
+        title: source.storyTitle,
+        acceptanceCriteria: source.acceptanceCriteria
+      },
+      figma: {
+        enabled: false,
+        links: [],
+        screens: []
+      },
+      generationPolicy: {
+        domain: "fintech",
+        testStyle: "manual",
+        maxTestCases: source.maxTestCases,
+        coverage: source.coverage
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Generation API returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function applyGenerationResponse(response) {
+  state.assumptions = response.assumptions || [];
+  state.questions = response.questionsForBA || [];
+  state.testCases = (response.testCases || []).map((testCase) => ({
+    title: testCase.title,
+    priority: testCase.priority,
+    category: testCase.category,
+    preconditions: testCase.preconditions || [],
+    steps: (testCase.steps || []).map((step) => ({
+      action: step.action,
+      expectedResult: step.expectedResult
+    }))
+  }));
+  state.generationSource = response.generationSource || "backend";
+}
+
+function applyFrontendGenerationFallback() {
   state.assumptions = [
     "User is authenticated before opening the payment flow.",
     "Domestic payment limits are configured outside this story.",
@@ -371,9 +449,7 @@ function generateTests() {
     "Should insufficient balance be validated before or after final submit?"
   ];
   state.testCases = createBaseTests(state.source);
-  state.expandedTestIndex = null;
-  renderReview();
-  setStep("review");
+  state.generationSource = "frontend-fallback";
 }
 
 function renderList(listElement, items) {
@@ -523,13 +599,73 @@ function validateBeforeImport() {
   return errors;
 }
 
-function mockImport() {
+async function mockImport() {
   const errors = validateBeforeImport();
   if (errors.length) {
     alert(errors.join("\n"));
     return;
   }
 
+  elements.mockImportButton.disabled = true;
+  elements.mockImportButton.textContent = "Importing...";
+
+  try {
+    const response = await requestBackendImport();
+    renderImportResult(response);
+  } catch (error) {
+    console.warn("Backend import unavailable, using frontend fallback.", error);
+    renderFrontendImportFallback();
+  } finally {
+    elements.mockImportButton.disabled = false;
+    elements.mockImportButton.textContent = "Mock import";
+  }
+
+  setStep("import");
+}
+
+async function requestBackendImport() {
+  const response = await fetch(`${API_BASE_URL}/imports/mock`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      sourceWorkItemId: state.source.storyId,
+      target: {
+        testPlanId: state.source.testPlanId,
+        testSuiteId: state.source.testSuiteId
+      },
+      testCases: state.testCases
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Import API returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function renderImportResult(response) {
+  const created = response.createdTestCases || [];
+  elements.resultSummary.innerHTML = `
+    <strong>${created.length} test cases returned from backend mock import.</strong>
+    <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
+  `;
+
+  elements.resultList.replaceChildren();
+  created.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    row.innerHTML = `
+      <span>${escapeHtml(item.title)}</span>
+      <span class="result-id">Mock ID ${item.id}</span>
+    `;
+    elements.resultList.appendChild(row);
+  });
+}
+
+function renderFrontendImportFallback() {
   const baseId = 55000 + Number(state.source.storyId || 1);
   const created = state.testCases.map((testCase, index) => ({
     id: baseId + index,
@@ -552,8 +688,6 @@ function mockImport() {
     `;
     elements.resultList.appendChild(row);
   });
-
-  setStep("import");
 }
 
 function downloadJson() {
