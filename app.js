@@ -3,7 +3,8 @@ const state = {
   assumptions: [],
   questions: [],
   testCases: [],
-  source: {}
+  source: {},
+  expandedTestIndex: null
 };
 
 const elements = {
@@ -192,22 +193,168 @@ function createBaseTests(source) {
     });
   }
 
-  tests.push({
-    title: "Verify confirmation screen displays correct payment summary",
-    priority: "Medium",
-    category: "Regression",
-    preconditions: ["User has submitted a valid domestic payment"],
-    steps: [
-      {
-        action: "Review beneficiary, amount, reference and account on confirmation screen",
-        expectedResult: "Displayed values match submitted payment data"
-      },
-      {
-        action: "Navigate away from confirmation screen",
-        expectedResult: "User returns to the expected payments area"
-      }
-    ]
-  });
+  tests.push(
+    {
+      title: "Verify confirmation screen displays correct payment summary",
+      priority: "Medium",
+      category: "Regression",
+      preconditions: ["User has submitted a valid domestic payment"],
+      steps: [
+        {
+          action: "Review beneficiary, amount, reference and account on confirmation screen",
+          expectedResult: "Displayed values match submitted payment data"
+        },
+        {
+          action: "Navigate away from confirmation screen",
+          expectedResult: "User returns to the expected payments area"
+        }
+      ]
+    },
+    {
+      title: "Verify payment reference validation for unsupported characters",
+      priority: "Medium",
+      category: "Negative",
+      preconditions: ["User is authenticated", "Domestic payment form is open"],
+      steps: [
+        {
+          action: "Enter unsupported characters in the payment reference field",
+          expectedResult: "Reference validation message is displayed"
+        },
+        {
+          action: "Attempt to continue",
+          expectedResult: "User cannot proceed until the reference is corrected"
+        }
+      ]
+    },
+    {
+      title: "Verify user can cancel payment before final confirmation",
+      priority: "Medium",
+      category: "Regression",
+      preconditions: ["User is authenticated", "Payment review screen is displayed"],
+      steps: [
+        {
+          action: "Select cancel or back action before final confirmation",
+          expectedResult: "Payment is not submitted"
+        },
+        {
+          action: "Return to payments overview",
+          expectedResult: "No new payment is created"
+        }
+      ]
+    },
+    {
+      title: "Verify validation message is clear for invalid beneficiary account",
+      priority: "High",
+      category: "Negative",
+      preconditions: ["User is authenticated", "Domestic payment form is open"],
+      steps: [
+        {
+          action: "Enter an invalid beneficiary account number",
+          expectedResult: "Beneficiary account validation error is displayed"
+        },
+        {
+          action: "Attempt to submit the payment",
+          expectedResult: "Payment is not submitted"
+        }
+      ]
+    },
+    {
+      title: "Verify payment amount accepts supported decimal precision",
+      priority: "Medium",
+      category: "Boundary",
+      preconditions: ["User is authenticated", "Domestic payment form is open"],
+      steps: [
+        {
+          action: "Enter amount with supported decimal precision",
+          expectedResult: "Amount is accepted"
+        },
+        {
+          action: "Enter amount with unsupported decimal precision",
+          expectedResult: "Amount validation message is displayed"
+        }
+      ]
+    },
+    {
+      title: "Verify duplicate submit does not create duplicate payments",
+      priority: "High",
+      category: "Security",
+      preconditions: ["User is authenticated", "Valid payment data is entered"],
+      steps: [
+        {
+          action: "Submit the payment and immediately attempt a second submit",
+          expectedResult: "Only one payment request is created"
+        },
+        {
+          action: "Check confirmation or status screen",
+          expectedResult: "User sees one final payment confirmation"
+        }
+      ]
+    },
+    {
+      title: "Verify payment form handles service unavailable response",
+      priority: "High",
+      category: "Negative",
+      preconditions: ["User is authenticated", "Payment service is unavailable"],
+      steps: [
+        {
+          action: "Submit valid payment data",
+          expectedResult: "User sees a clear service unavailable message"
+        },
+        {
+          action: "Review payment status",
+          expectedResult: "No confirmed payment is shown without successful processing"
+        }
+      ]
+    },
+    {
+      title: "Verify mandatory field error messages disappear after correction",
+      priority: "Low",
+      category: "Regression",
+      preconditions: ["User is authenticated", "Mandatory field errors are visible"],
+      steps: [
+        {
+          action: "Correct all mandatory fields",
+          expectedResult: "Validation messages are removed"
+        },
+        {
+          action: "Continue to review screen",
+          expectedResult: "Review screen is displayed"
+        }
+      ]
+    },
+    {
+      title: "Verify screen data is preserved when returning from review to form",
+      priority: "Medium",
+      category: "Regression",
+      preconditions: ["User is authenticated", "Payment review screen is displayed"],
+      steps: [
+        {
+          action: "Return from payment review to payment form",
+          expectedResult: "Previously entered payment data is still displayed"
+        },
+        {
+          action: "Continue again to review screen",
+          expectedResult: "Updated review data is displayed"
+        }
+      ]
+    },
+    {
+      title: "Verify audit record exists for failed payment submission",
+      priority: "Medium",
+      category: "Audit",
+      preconditions: ["Audit logging is enabled", "Payment submission fails"],
+      steps: [
+        {
+          action: "Submit payment data that triggers a failure",
+          expectedResult: "Failure is displayed to the user"
+        },
+        {
+          action: "Check audit record for failed submission",
+          expectedResult: "Audit record contains user, timestamp, action and failure result"
+        }
+      ]
+    }
+  );
 
   return tests.slice(0, source.maxTestCases);
 }
@@ -224,6 +371,7 @@ function generateTests() {
     "Should insufficient balance be validated before or after final submit?"
   ];
   state.testCases = createBaseTests(state.source);
+  state.expandedTestIndex = null;
   renderReview();
   setStep("review");
 }
@@ -242,37 +390,62 @@ function renderReview() {
   renderList(elements.questionsList, state.questions);
   elements.testList.replaceChildren();
   state.testCases.forEach((testCase, index) => {
-    elements.testList.appendChild(renderTestCard(testCase, index));
+    renderTestRows(testCase, index).forEach((row) => elements.testList.appendChild(row));
   });
   elements.appStatus.textContent = `${state.testCases.length} tests`;
 }
 
-function renderTestCard(testCase, index) {
+function renderTestRows(testCase, index) {
   const template = document.querySelector("#testCaseTemplate");
-  const card = template.content.firstElementChild.cloneNode(true);
+  const fragment = template.content.cloneNode(true);
+  const summaryRow = fragment.querySelector(".test-summary-row");
+  const detailRow = fragment.querySelector(".test-detail-row");
+  const toggleButton = fragment.querySelector(".toggle-test");
+  const titleCell = fragment.querySelector(".test-summary-title");
+  const categoryCell = fragment.querySelector(".test-summary-category");
+  const priorityCell = fragment.querySelector(".test-summary-priority");
 
-  card.querySelector(".test-title").value = testCase.title;
-  card.querySelector(".test-priority").value = testCase.priority;
-  card.querySelector(".test-category").value = testCase.category;
-  card.querySelector(".test-preconditions").value = testCase.preconditions.join("\n");
+  summaryRow.querySelector(".test-number").textContent = index + 1;
+  titleCell.textContent = testCase.title;
+  categoryCell.textContent = testCase.category;
+  priorityCell.textContent = testCase.priority;
 
-  card.querySelector(".test-title").addEventListener("input", (event) => {
-    state.testCases[index].title = event.target.value;
-  });
-  card.querySelector(".test-priority").addEventListener("change", (event) => {
-    state.testCases[index].priority = event.target.value;
-  });
-  card.querySelector(".test-category").addEventListener("change", (event) => {
-    state.testCases[index].category = event.target.value;
-  });
-  card.querySelector(".test-preconditions").addEventListener("input", (event) => {
-    state.testCases[index].preconditions = splitLines(event.target.value);
-  });
-  card.querySelector(".delete-test").addEventListener("click", () => {
-    state.testCases.splice(index, 1);
+  const isExpanded = state.expandedTestIndex === index;
+  detailRow.classList.toggle("is-hidden", !isExpanded);
+  toggleButton.textContent = isExpanded ? "Close" : "Open";
+  toggleButton.setAttribute("aria-expanded", String(isExpanded));
+
+  toggleButton.addEventListener("click", () => {
+    state.expandedTestIndex = isExpanded ? null : index;
     renderReview();
   });
-  card.querySelector(".add-step").addEventListener("click", () => {
+
+  detailRow.querySelector(".test-title").value = testCase.title;
+  detailRow.querySelector(".test-priority").value = testCase.priority;
+  detailRow.querySelector(".test-category").value = testCase.category;
+  detailRow.querySelector(".test-preconditions").value = testCase.preconditions.join("\n");
+
+  detailRow.querySelector(".test-title").addEventListener("input", (event) => {
+    state.testCases[index].title = event.target.value;
+    titleCell.textContent = event.target.value;
+  });
+  detailRow.querySelector(".test-priority").addEventListener("change", (event) => {
+    state.testCases[index].priority = event.target.value;
+    priorityCell.textContent = event.target.value;
+  });
+  detailRow.querySelector(".test-category").addEventListener("change", (event) => {
+    state.testCases[index].category = event.target.value;
+    categoryCell.textContent = event.target.value;
+  });
+  detailRow.querySelector(".test-preconditions").addEventListener("input", (event) => {
+    state.testCases[index].preconditions = splitLines(event.target.value);
+  });
+  detailRow.querySelector(".delete-test").addEventListener("click", () => {
+    state.testCases.splice(index, 1);
+    state.expandedTestIndex = null;
+    renderReview();
+  });
+  detailRow.querySelector(".add-step").addEventListener("click", () => {
     state.testCases[index].steps.push({
       action: "New action",
       expectedResult: "Expected result"
@@ -280,12 +453,12 @@ function renderTestCard(testCase, index) {
     renderReview();
   });
 
-  const stepsList = card.querySelector(".steps-list");
+  const stepsList = detailRow.querySelector(".steps-list");
   testCase.steps.forEach((step, stepIndex) => {
     stepsList.appendChild(renderStepRow(step, index, stepIndex));
   });
 
-  return card;
+  return [summaryRow, detailRow];
 }
 
 function renderStepRow(step, testIndex, stepIndex) {
@@ -328,6 +501,7 @@ function addEmptyTestCase() {
       }
     ]
   });
+  state.expandedTestIndex = state.testCases.length - 1;
   renderReview();
 }
 
@@ -404,6 +578,7 @@ function resetDraft() {
   state.assumptions = [];
   state.questions = [];
   state.testCases = [];
+  state.expandedTestIndex = null;
   setStep("source");
 }
 
