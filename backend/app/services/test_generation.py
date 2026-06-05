@@ -1,6 +1,9 @@
 from app.models import GenerationRequest, GenerationResponse, TestCase, TestStep
 
 
+MAX_TESTS_PER_STORY = 150
+
+
 def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
     if _is_wise_transfer_story(request):
         return _generate_wise_transfer_tests(request)
@@ -13,7 +16,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
         tests.append(
             _test_case(
                 "Verify domestic payment is created with valid mandatory data",
-                "High",
+                "P1",
                 "Positive",
                 [
                     "User is authenticated",
@@ -38,7 +41,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             [
                 _test_case(
                     "Verify payment cannot be submitted when mandatory fields are empty",
-                    "High",
+                    "P1",
                     "Negative",
                     ["User is authenticated"],
                     [
@@ -51,7 +54,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
                 ),
                 _test_case(
                     "Verify payment is blocked when available balance is insufficient",
-                    "High",
+                    "P2",
                     "Negative",
                     [
                         "User is authenticated",
@@ -76,7 +79,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             [
                 _test_case(
                     "Verify amount boundary validation for minimum and maximum values",
-                    "Medium",
+                    "P3",
                     "Boundary",
                     ["User is authenticated", "Payment limits are configured"],
                     [
@@ -92,7 +95,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
                 ),
                 _test_case(
                     "Verify payment amount accepts supported decimal precision",
-                    "Medium",
+                    "P3",
                     "Boundary",
                     ["User is authenticated", "Domestic payment form is open"],
                     [
@@ -111,7 +114,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             [
                 _test_case(
                     "Verify user cannot create payment from an unauthorized account",
-                    "High",
+                    "P1",
                     "Security",
                     [
                         "User is authenticated",
@@ -130,7 +133,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
                 ),
                 _test_case(
                     "Verify duplicate submit does not create duplicate payments",
-                    "High",
+                    "P2",
                     "Security",
                     ["User is authenticated", "Valid payment data is entered"],
                     [
@@ -152,7 +155,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             [
                 _test_case(
                     "Verify payment creation attempt is auditable",
-                    "Medium",
+                    "P3",
                     "Audit",
                     ["Audit logging is enabled"],
                     [
@@ -168,7 +171,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
                 ),
                 _test_case(
                     "Verify audit record exists for failed payment submission",
-                    "Medium",
+                    "P5",
                     "Audit",
                     ["Audit logging is enabled", "Payment submission fails"],
                     [
@@ -186,8 +189,8 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
         [
             _test_case(
                 "Verify confirmation screen displays correct payment summary",
-                "Medium",
-                "Regression",
+                "P4",
+                "Positive",
                 ["User has submitted a valid domestic payment"],
                 [
                     (
@@ -202,7 +205,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify payment reference validation for unsupported characters",
-                "Medium",
+                "P3",
                 "Negative",
                 ["User is authenticated", "Domestic payment form is open"],
                 [
@@ -218,7 +221,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify user can cancel payment before final confirmation",
-                "Medium",
+                "P4",
                 "Regression",
                 ["User is authenticated", "Payment review screen is displayed"],
                 [
@@ -231,7 +234,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify validation message is clear for invalid beneficiary account",
-                "High",
+                "P2",
                 "Negative",
                 ["User is authenticated", "Domestic payment form is open"],
                 [
@@ -244,7 +247,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify payment form handles service unavailable response",
-                "High",
+                "P1",
                 "Negative",
                 ["User is authenticated", "Payment service is unavailable"],
                 [
@@ -260,7 +263,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify mandatory field error messages disappear after correction",
-                "Low",
+                "P5",
                 "Regression",
                 ["User is authenticated", "Mandatory field errors are visible"],
                 [
@@ -270,7 +273,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             ),
             _test_case(
                 "Verify screen data is preserved when returning from review to form",
-                "Medium",
+                "P4",
                 "Regression",
                 ["User is authenticated", "Payment review screen is displayed"],
                 [
@@ -287,7 +290,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
         ]
     )
 
-    selected_tests = tests[: policy.max_test_cases]
+    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases)
 
     return GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
@@ -296,6 +299,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
             "User is authenticated before opening the payment flow.",
             "Domestic payment limits are configured outside this story.",
             "Generated tests must be reviewed by QA before Azure DevOps import.",
+            *_attachment_assumptions(request),
         ],
         questionsForBA=[
             "What special characters are allowed in the payment reference field?",
@@ -307,7 +311,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
 
 
 def _is_wise_transfer_story(request: GenerationRequest) -> bool:
-    context = f"{request.story.title}\n{request.story.acceptance_criteria}".lower()
+    context = f"{request.story.title}\n{request.story.acceptance_criteria}\n{_attachment_text_context(request)}".lower()
     return "wise" in context and ("currency" in context or "currencies" in context)
 
 
@@ -316,7 +320,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
     tests = [
         _test_case(
             "Verify Wise country list contains only supported countries",
-            "High",
+            "P1",
             "Positive",
             ["User is authenticated", "International transfer flow is available"],
             [
@@ -329,7 +333,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify local currency is applied for Switzerland Wise transfer",
-            "High",
+            "P1",
             "Positive",
             ["User is authenticated", "Switzerland is selected as destination country"],
             [
@@ -339,7 +343,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify local currency is applied for United Kingdom Wise transfer",
-            "High",
+            "P2",
             "Positive",
             ["User is authenticated", "United Kingdom is selected as destination country"],
             [
@@ -349,7 +353,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify local currency is applied for United States Wise transfer",
-            "High",
+            "P2",
             "Positive",
             ["User is authenticated", "United States is selected as destination country"],
             [
@@ -359,7 +363,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify unsupported country cannot be selected for Wise transfer",
-            "High",
+            "P1",
             "Negative",
             ["User is authenticated", "International transfer flow is available"],
             [
@@ -369,7 +373,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify mismatched country and currency combination is rejected",
-            "High",
+            "P2",
             "Negative",
             ["User is authenticated", "Wise country and currency fields are visible"],
             [
@@ -379,7 +383,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify Wise eligibility is confirmed based on country, currency and amount",
-            "High",
+            "P1",
             "Positive",
             ["User is authenticated", "Supported country and matching currency are selected"],
             [
@@ -389,7 +393,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify amount is mandatory for Wise eligibility confirmation",
-            "High",
+            "P2",
             "Negative",
             ["User is authenticated", "Supported country and matching currency are selected"],
             [
@@ -399,7 +403,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify Commission OUR becomes read-only after IBAN is entered",
-            "Medium",
+            "P3",
             "Regression",
             ["User is authenticated", "International transfer form is open"],
             [
@@ -409,7 +413,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify Currency becomes read-only after IBAN is entered",
-            "High",
+            "P1",
             "Regression",
             ["User is authenticated", "International transfer form is open"],
             [
@@ -419,7 +423,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify Value date becomes read-only after IBAN is entered",
-            "Medium",
+            "P5",
             "Regression",
             ["User is authenticated", "International transfer form is open"],
             [
@@ -429,7 +433,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify fixed fields are visually clear after IBAN entry",
-            "Medium",
+            "P4",
             "Positive",
             ["User is authenticated", "A valid IBAN has been entered"],
             [
@@ -439,7 +443,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify UI instructions guide the user through Wise transfer setup",
-            "Low",
+            "P3",
             "Positive",
             ["User is authenticated", "Wise transfer flow is available"],
             [
@@ -449,7 +453,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify auditability of Wise eligibility decision",
-            "Medium",
+            "P5",
             "Audit",
             ["Audit logging is enabled", "Wise eligibility check is performed"],
             [
@@ -459,7 +463,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
         _test_case(
             "Verify Wise flow handles service unavailable response",
-            "High",
+            "P1",
             "Negative",
             ["User is authenticated", "Wise eligibility service is unavailable"],
             [
@@ -469,7 +473,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
     ]
 
-    selected_tests = tests[: policy.max_test_cases]
+    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases)
 
     return GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
@@ -478,6 +482,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
             "Wise eligibility is determined by country, currency and amount.",
             "Supported country/currency pairs are Switzerland/CHF, United Kingdom/GBP and United States/USD.",
             "Commission OUR, Currency and Value date become fixed after IBAN entry.",
+            *_attachment_assumptions(request),
         ],
         questionsForBA=[
             "What are the amount limits for Wise eligibility per currency?",
@@ -508,3 +513,65 @@ def _test_case(
         coverage=[category],
         tags=["manual", category.lower(), "backend-mock"],
     )
+
+
+def _limit_tests(tests: list[TestCase], max_count: int) -> list[TestCase]:
+    count = min(max(max_count, 0), MAX_TESTS_PER_STORY)
+    return tests[:count]
+
+
+def _filter_tests(tests: list[TestCase], request: GenerationRequest) -> list[TestCase]:
+    coverage = request.generation_policy.coverage
+    allowed_categories = set()
+    if coverage.positive:
+        allowed_categories.add("Positive")
+    if coverage.negative:
+        allowed_categories.add("Negative")
+    if coverage.boundary:
+        allowed_categories.add("Boundary")
+    if coverage.security:
+        allowed_categories.add("Security")
+    if coverage.audit:
+        allowed_categories.add("Audit")
+
+    priorities = request.generation_policy.priorities
+    allowed_priorities = set()
+    if priorities.p1:
+        allowed_priorities.add("P1")
+    if priorities.p2:
+        allowed_priorities.add("P2")
+    if priorities.p3:
+        allowed_priorities.add("P3")
+    if priorities.p4:
+        allowed_priorities.add("P4")
+    if priorities.p5:
+        allowed_priorities.add("P5")
+
+    return [
+        test
+        for test in tests
+        if test.category in allowed_categories and test.priority in allowed_priorities
+    ]
+
+
+def _included_attachments(request: GenerationRequest):
+    return [
+        attachment
+        for attachment in request.story.attachments
+        if attachment.included and attachment.text.strip()
+    ]
+
+
+def _attachment_assumptions(request: GenerationRequest) -> list[str]:
+    attachments = _included_attachments(request)
+    if not attachments:
+        return []
+    names = ", ".join(attachment.name for attachment in attachments)
+    return [f"Included attachment documentation was considered: {names}."]
+
+
+def _attachment_text_context(request: GenerationRequest) -> str:
+    chunks = []
+    for attachment in _included_attachments(request):
+        chunks.append(f"Attachment: {attachment.name}\n{attachment.text[:4000]}")
+    return "\n\n".join(chunks)

@@ -124,11 +124,18 @@ button {
   color: #ffffff;
 }
 
-.sidebar-panel {
+.sidebar-filter-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 0.65fr);
+  gap: 14px;
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.sidebar-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
 }
 
 .sidebar-panel h2 {
@@ -252,6 +259,80 @@ textarea:focus {
   gap: 14px;
 }
 
+.source-status {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  padding: 9px 10px;
+}
+
+.source-status.is-success {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.attachment-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.attachment-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.attachment-heading h4,
+.attachment-heading p {
+  margin: 0;
+}
+
+.attachment-heading p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px 10px;
+}
+
+.attachment-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.attachment-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -344,6 +425,21 @@ textarea:focus {
   border-radius: 8px;
   overflow: hidden;
   background: #ffffff;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.pagination-bar > div {
+  display: flex;
+  gap: 8px;
 }
 
 .test-table {

@@ -9,6 +9,14 @@ class CoverageOptions(BaseModel):
     audit: bool = True
 
 
+class PriorityOptions(BaseModel):
+    p1: bool = True
+    p2: bool = True
+    p3: bool = True
+    p4: bool = True
+    p5: bool = True
+
+
 class AzureSource(BaseModel):
     organization: str = ""
     project: str = ""
@@ -20,6 +28,7 @@ class AzureSource(BaseModel):
 class StoryContext(BaseModel):
     title: str = ""
     acceptance_criteria: str = Field(default="", alias="acceptanceCriteria")
+    attachments: list["WorkItemAttachment"] = Field(default_factory=list)
 
 
 class FigmaContext(BaseModel):
@@ -31,8 +40,9 @@ class FigmaContext(BaseModel):
 class GenerationPolicy(BaseModel):
     domain: str = "fintech"
     test_style: str = Field(default="manual", alias="testStyle")
-    max_test_cases: int = Field(default=15, alias="maxTestCases", ge=1, le=30)
+    max_test_cases: int = Field(default=150, alias="maxTestCases", ge=1, le=150)
     coverage: CoverageOptions = Field(default_factory=CoverageOptions)
+    priorities: PriorityOptions = Field(default_factory=PriorityOptions)
 
 
 class GenerationRequest(BaseModel):
@@ -48,6 +58,15 @@ class WorkItemRelation(BaseModel):
     name: str = ""
 
 
+class WorkItemAttachment(BaseModel):
+    id: str
+    name: str
+    url: str
+    text: str = ""
+    extraction_status: str = Field(default="not-extracted", alias="extractionStatus")
+    included: bool = True
+
+
 class WorkItemResponse(BaseModel):
     id: int
     work_item_type: str = Field(alias="workItemType")
@@ -60,6 +79,7 @@ class WorkItemResponse(BaseModel):
     priority: int | None = None
     parent_id: int | None = Field(default=None, alias="parentId")
     relations: list[WorkItemRelation] = Field(default_factory=list)
+    attachments: list[WorkItemAttachment] = Field(default_factory=list)
 
 
 class TestStep(BaseModel):

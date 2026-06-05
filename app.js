@@ -5,8 +5,15 @@ const state = {
   testCases: [],
   source: {},
   expandedTestIndex: null,
-  generationSource: "frontend-fallback"
+  generationSource: "frontend-fallback",
+  storyImported: false,
+  currentPage: 1,
+  pageSize: 25,
+  attachments: []
 };
+
+const PAGE_SIZE = 25;
+const MAX_TESTS_PER_STORY = 150;
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
@@ -15,6 +22,7 @@ const elements = {
   sourcePanel: document.querySelector("#sourcePanel"),
   reviewPanel: document.querySelector("#reviewPanel"),
   importPanel: document.querySelector("#importPanel"),
+  importStoryButton: document.querySelector("#importStoryButton"),
   generateButton: document.querySelector("#generateButton"),
   resetButton: document.querySelector("#resetButton"),
   addTestButton: document.querySelector("#addTestButton"),
@@ -25,6 +33,13 @@ const elements = {
   assumptionsList: document.querySelector("#assumptionsList"),
   questionsList: document.querySelector("#questionsList"),
   testList: document.querySelector("#testList"),
+  sourceStatus: document.querySelector("#sourceStatus"),
+  paginationBar: document.querySelector("#paginationBar"),
+  paginationInfo: document.querySelector("#paginationInfo"),
+  previousPageButton: document.querySelector("#previousPageButton"),
+  nextPageButton: document.querySelector("#nextPageButton"),
+  attachmentPanel: document.querySelector("#attachmentPanel"),
+  attachmentList: document.querySelector("#attachmentList"),
   resultSummary: document.querySelector("#resultSummary"),
   resultList: document.querySelector("#resultList")
 };
@@ -37,6 +52,14 @@ const coverageInputs = [
   "includeAudit"
 ].map((id) => document.querySelector(`#${id}`));
 
+const priorityInputs = [
+  "includeP1",
+  "includeP2",
+  "includeP3",
+  "includeP4",
+  "includeP5"
+].map((id) => document.querySelector(`#${id}`));
+
 function readSource() {
   return {
     organization: document.querySelector("#organization").value.trim(),
@@ -44,13 +67,23 @@ function readSource() {
     storyId: document.querySelector("#storyId").value.trim(),
     testPlanId: document.querySelector("#testPlanId").value.trim(),
     testSuiteId: document.querySelector("#testSuiteId").value.trim(),
-    maxTestCases: Number(document.querySelector("#maxTestCases").value || 8),
     storyTitle: document.querySelector("#storyTitle").value.trim(),
     acceptanceCriteria: document.querySelector("#acceptanceCriteria").value.trim(),
+    attachments: state.attachments,
     coverage: Object.fromEntries(
       coverageInputs.map((input) => [input.id.replace("include", "").toLowerCase(), input.checked])
+    ),
+    priorities: Object.fromEntries(
+      priorityInputs.map((input) => [input.id.replace("include", "").toLowerCase(), input.checked])
     )
   };
+}
+
+function setStoryImported(imported, message) {
+  state.storyImported = imported;
+  elements.generateButton.disabled = !imported;
+  elements.sourceStatus.textContent = message;
+  elements.sourceStatus.classList.toggle("is-success", imported);
 }
 
 function setStep(step) {
@@ -77,7 +110,7 @@ function createBaseTests(source) {
   if (source.coverage.positive) {
     tests.push({
       title: "Verify domestic payment is created with valid mandatory data",
-      priority: "High",
+      priority: "P1",
       category: "Positive",
       preconditions: [
         "User is authenticated",
@@ -103,7 +136,7 @@ function createBaseTests(source) {
   if (source.coverage.negative) {
     tests.push({
       title: "Verify payment cannot be submitted when mandatory fields are empty",
-      priority: "High",
+      priority: "P1",
       category: "Negative",
       preconditions: ["User is authenticated"],
       steps: [
@@ -120,7 +153,7 @@ function createBaseTests(source) {
 
     tests.push({
       title: "Verify payment is blocked when available balance is insufficient",
-      priority: "High",
+      priority: "P2",
       category: "Negative",
       preconditions: [
         "User is authenticated",
@@ -142,7 +175,7 @@ function createBaseTests(source) {
   if (source.coverage.boundary) {
     tests.push({
       title: "Verify amount boundary validation for minimum and maximum values",
-      priority: "Medium",
+      priority: "P5",
       category: "Boundary",
       preconditions: ["User is authenticated", "Payment limits are configured"],
       steps: [
@@ -161,7 +194,7 @@ function createBaseTests(source) {
   if (source.coverage.security) {
     tests.push({
       title: "Verify user cannot create payment from an unauthorized account",
-      priority: "High",
+      priority: "P1",
       category: "Security",
       preconditions: ["User is authenticated", "User does not have permission for selected account"],
       steps: [
@@ -180,7 +213,7 @@ function createBaseTests(source) {
   if (source.coverage.audit) {
     tests.push({
       title: "Verify payment creation attempt is auditable",
-      priority: "Medium",
+      priority: "P3",
       category: "Audit",
       preconditions: ["Audit logging is enabled"],
       steps: [
@@ -199,8 +232,8 @@ function createBaseTests(source) {
   tests.push(
     {
       title: "Verify confirmation screen displays correct payment summary",
-      priority: "Medium",
-      category: "Regression",
+      priority: "P4",
+      category: "Positive",
       preconditions: ["User has submitted a valid domestic payment"],
       steps: [
         {
@@ -215,7 +248,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify payment reference validation for unsupported characters",
-      priority: "Medium",
+      priority: "P3",
       category: "Negative",
       preconditions: ["User is authenticated", "Domestic payment form is open"],
       steps: [
@@ -231,7 +264,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify user can cancel payment before final confirmation",
-      priority: "Medium",
+      priority: "P4",
       category: "Regression",
       preconditions: ["User is authenticated", "Payment review screen is displayed"],
       steps: [
@@ -247,7 +280,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify validation message is clear for invalid beneficiary account",
-      priority: "High",
+      priority: "P2",
       category: "Negative",
       preconditions: ["User is authenticated", "Domestic payment form is open"],
       steps: [
@@ -263,7 +296,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify payment amount accepts supported decimal precision",
-      priority: "Medium",
+      priority: "P3",
       category: "Boundary",
       preconditions: ["User is authenticated", "Domestic payment form is open"],
       steps: [
@@ -279,7 +312,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify duplicate submit does not create duplicate payments",
-      priority: "High",
+      priority: "P1",
       category: "Security",
       preconditions: ["User is authenticated", "Valid payment data is entered"],
       steps: [
@@ -295,7 +328,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify payment form handles service unavailable response",
-      priority: "High",
+      priority: "P2",
       category: "Negative",
       preconditions: ["User is authenticated", "Payment service is unavailable"],
       steps: [
@@ -311,7 +344,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify mandatory field error messages disappear after correction",
-      priority: "Low",
+      priority: "P5",
       category: "Regression",
       preconditions: ["User is authenticated", "Mandatory field errors are visible"],
       steps: [
@@ -327,7 +360,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify screen data is preserved when returning from review to form",
-      priority: "Medium",
+      priority: "P4",
       category: "Regression",
       preconditions: ["User is authenticated", "Payment review screen is displayed"],
       steps: [
@@ -343,7 +376,7 @@ function createBaseTests(source) {
     },
     {
       title: "Verify audit record exists for failed payment submission",
-      priority: "Medium",
+      priority: "P3",
       category: "Audit",
       preconditions: ["Audit logging is enabled", "Payment submission fails"],
       steps: [
@@ -359,11 +392,18 @@ function createBaseTests(source) {
     }
   );
 
-  return tests.slice(0, source.maxTestCases);
+  return limitTests(filterTestsByPriority(filterTestsByCoverage(tests, source.coverage), source.priorities), MAX_TESTS_PER_STORY);
 }
 
 async function generateTests() {
   state.source = readSource();
+  if (!state.storyImported) {
+    alert("Import the user story before generating tests.");
+    return;
+  }
+
+  state.pageSize = PAGE_SIZE;
+  state.currentPage = 1;
   elements.generateButton.disabled = true;
   elements.generateButton.textContent = "Generating...";
 
@@ -383,6 +423,44 @@ async function generateTests() {
   setStep("review");
 }
 
+async function importStory() {
+  const source = readSource();
+  if (!source.storyId) {
+    alert("Enter a User Story ID first.");
+    return;
+  }
+
+  elements.importStoryButton.disabled = true;
+  elements.importStoryButton.textContent = "Importing...";
+  setStoryImported(false, "Importing story from Azure DevOps...");
+
+  try {
+    const story = await requestBackendStory(source.storyId);
+    document.querySelector("#storyTitle").value = story.title || "";
+    document.querySelector("#acceptanceCriteria").value = story.acceptanceCriteria || story.description || "";
+    state.attachments = story.attachments || [];
+    renderAttachments();
+    setStoryImported(true, `Imported ${story.workItemType} #${story.id}: ${story.title}`);
+  } catch (error) {
+    console.error("Story import failed.", error);
+    setStoryImported(false, "Story import failed. Check that the backend is running and the token is valid.");
+    alert("Story import failed. Start the backend and try again.");
+  } finally {
+    elements.importStoryButton.disabled = false;
+    elements.importStoryButton.textContent = "Import story";
+  }
+}
+
+async function requestBackendStory(storyId) {
+  const response = await fetch(`${API_BASE_URL}/azure/work-items/${encodeURIComponent(storyId)}`);
+
+  if (!response.ok) {
+    throw new Error(`Story import API returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
 async function requestBackendGeneration(source) {
   const response = await fetch(`${API_BASE_URL}/generations/mock`, {
     method: "POST",
@@ -399,7 +477,8 @@ async function requestBackendGeneration(source) {
       },
       story: {
         title: source.storyTitle,
-        acceptanceCriteria: source.acceptanceCriteria
+        acceptanceCriteria: source.acceptanceCriteria,
+        attachments: source.attachments
       },
       figma: {
         enabled: false,
@@ -409,8 +488,8 @@ async function requestBackendGeneration(source) {
       generationPolicy: {
         domain: "fintech",
         testStyle: "manual",
-        maxTestCases: source.maxTestCases,
-        coverage: source.coverage
+        coverage: source.coverage,
+        priorities: source.priorities
       }
     })
   });
@@ -461,14 +540,66 @@ function renderList(listElement, items) {
   });
 }
 
+function renderAttachments() {
+  elements.attachmentList.replaceChildren();
+  elements.attachmentPanel.classList.toggle("is-hidden", !state.attachments.length);
+
+  if (!state.attachments.length) {
+    return;
+  }
+
+  state.attachments.forEach((attachment, index) => {
+    const row = document.createElement("div");
+    row.className = "attachment-row";
+    const textLength = attachment.text ? attachment.text.length : 0;
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(attachment.name)}</strong>
+        <span>${escapeHtml(attachment.extractionStatus || "not-extracted")} · ${textLength} chars extracted</span>
+      </div>
+      <button class="compact-action" type="button">Remove</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => {
+      state.attachments.splice(index, 1);
+      renderAttachments();
+      setStoryImported(true, "Attachment list updated. Generate tests with the remaining documentation.");
+    });
+    elements.attachmentList.appendChild(row);
+  });
+}
+
 function renderReview() {
   renderList(elements.assumptionsList, state.assumptions);
   renderList(elements.questionsList, state.questions);
   elements.testList.replaceChildren();
-  state.testCases.forEach((testCase, index) => {
-    renderTestRows(testCase, index).forEach((row) => elements.testList.appendChild(row));
+
+  const totalPages = getTotalPages();
+  state.currentPage = Math.min(Math.max(state.currentPage, 1), totalPages);
+  const startIndex = (state.currentPage - 1) * state.pageSize;
+  const visibleTests = state.testCases.slice(startIndex, startIndex + state.pageSize);
+
+  visibleTests.forEach((testCase, visibleIndex) => {
+    const absoluteIndex = startIndex + visibleIndex;
+    renderTestRows(testCase, absoluteIndex).forEach((row) => elements.testList.appendChild(row));
   });
+
+  renderPagination();
   elements.appStatus.textContent = `${state.testCases.length} tests`;
+}
+
+function renderPagination() {
+  const totalPages = getTotalPages();
+  const start = state.testCases.length ? (state.currentPage - 1) * state.pageSize + 1 : 0;
+  const end = Math.min(state.currentPage * state.pageSize, state.testCases.length);
+
+  elements.paginationInfo.textContent = `Showing ${start}-${end} of ${state.testCases.length} tests. Page ${state.currentPage} of ${totalPages}.`;
+  elements.previousPageButton.disabled = state.currentPage <= 1;
+  elements.nextPageButton.disabled = state.currentPage >= totalPages;
+  elements.paginationBar.classList.toggle("is-hidden", state.testCases.length <= state.pageSize);
+}
+
+function getTotalPages() {
+  return Math.max(1, Math.ceil(state.testCases.length / state.pageSize));
 }
 
 function renderTestRows(testCase, index) {
@@ -567,7 +698,7 @@ function splitLines(value) {
 function addEmptyTestCase() {
   state.testCases.push({
     title: "New test case",
-    priority: "Medium",
+    priority: "P3",
     category: "Regression",
     preconditions: ["User is authenticated"],
     steps: [
@@ -578,6 +709,7 @@ function addEmptyTestCase() {
     ]
   });
   state.expandedTestIndex = state.testCases.length - 1;
+  state.currentPage = getTotalPages();
   renderReview();
 }
 
@@ -713,7 +845,57 @@ function resetDraft() {
   state.questions = [];
   state.testCases = [];
   state.expandedTestIndex = null;
+  state.currentPage = 1;
+  state.attachments = [];
+  renderAttachments();
+  setStoryImported(false, "Import the story before generating tests.");
+  document.querySelector("#storyTitle").value = "";
+  document.querySelector("#acceptanceCriteria").value = "";
   setStep("source");
+}
+
+function limitTests(tests, maxCount) {
+  return tests.slice(0, Math.min(Math.max(Number(maxCount) || 0, 0), MAX_TESTS_PER_STORY));
+}
+
+function filterTestsByCoverage(tests, coverage) {
+  const allowedCategories = new Set();
+  if (coverage.positive) {
+    allowedCategories.add("Positive");
+  }
+  if (coverage.negative) {
+    allowedCategories.add("Negative");
+  }
+  if (coverage.boundary) {
+    allowedCategories.add("Boundary");
+  }
+  if (coverage.security) {
+    allowedCategories.add("Security");
+  }
+  if (coverage.audit) {
+    allowedCategories.add("Audit");
+  }
+  return tests.filter((test) => allowedCategories.has(test.category));
+}
+
+function filterTestsByPriority(tests, priorities) {
+  const allowedPriorities = new Set();
+  if (priorities.p1) {
+    allowedPriorities.add("P1");
+  }
+  if (priorities.p2) {
+    allowedPriorities.add("P2");
+  }
+  if (priorities.p3) {
+    allowedPriorities.add("P3");
+  }
+  if (priorities.p4) {
+    allowedPriorities.add("P4");
+  }
+  if (priorities.p5) {
+    allowedPriorities.add("P5");
+  }
+  return tests.filter((test) => allowedPriorities.has(test.priority));
 }
 
 function escapeHtml(value) {
@@ -725,6 +907,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+elements.importStoryButton.addEventListener("click", importStory);
 elements.generateButton.addEventListener("click", generateTests);
 elements.resetButton.addEventListener("click", resetDraft);
 elements.addTestButton.addEventListener("click", addEmptyTestCase);
@@ -732,6 +915,24 @@ elements.mockImportButton.addEventListener("click", mockImport);
 elements.backToSourceButton.addEventListener("click", () => setStep("source"));
 elements.backToReviewButton.addEventListener("click", () => setStep("review"));
 elements.downloadJsonButton.addEventListener("click", downloadJson);
+elements.previousPageButton.addEventListener("click", () => {
+  state.currentPage = Math.max(1, state.currentPage - 1);
+  state.expandedTestIndex = null;
+  renderReview();
+});
+elements.nextPageButton.addEventListener("click", () => {
+  state.currentPage = Math.min(getTotalPages(), state.currentPage + 1);
+  state.expandedTestIndex = null;
+  renderReview();
+});
+
+["storyId", "organization", "project"].forEach((id) => {
+  document.querySelector(`#${id}`).addEventListener("input", () => {
+    state.attachments = [];
+    renderAttachments();
+    setStoryImported(false, "Story source changed. Import the story again before generating tests.");
+  });
+});
 
 document.querySelectorAll(".step").forEach((button) => {
   button.addEventListener("click", () => {
@@ -745,4 +946,5 @@ document.querySelectorAll(".step").forEach((button) => {
   });
 });
 
+setStoryImported(false, "Import the story before generating tests.");
 setStep("source");

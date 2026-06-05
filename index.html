@@ -32,14 +32,25 @@
           </button>
         </nav>
 
-        <section class="sidebar-panel">
-          <h2>Coverage</h2>
-          <label>Positive <input type="checkbox" id="includePositive" checked></label>
-          <label>Negative <input type="checkbox" id="includeNegative" checked></label>
-          <label>Boundary <input type="checkbox" id="includeBoundary" checked></label>
-          <label>Security <input type="checkbox" id="includeSecurity" checked></label>
-          <label>Audit <input type="checkbox" id="includeAudit" checked></label>
-        </section>
+        <div class="sidebar-filter-grid">
+          <section class="sidebar-panel">
+            <h2>Coverage</h2>
+            <label>Positive <input type="checkbox" id="includePositive" checked></label>
+            <label>Negative <input type="checkbox" id="includeNegative" checked></label>
+            <label>Boundary <input type="checkbox" id="includeBoundary" checked></label>
+            <label>Security <input type="checkbox" id="includeSecurity" checked></label>
+            <label>Audit <input type="checkbox" id="includeAudit" checked></label>
+          </section>
+
+          <section class="sidebar-panel">
+            <h2>Priority</h2>
+            <label>P1 <input type="checkbox" id="includeP1" checked></label>
+            <label>P2 <input type="checkbox" id="includeP2" checked></label>
+            <label>P3 <input type="checkbox" id="includeP3" checked></label>
+            <label>P4 <input type="checkbox" id="includeP4" checked></label>
+            <label>P5 <input type="checkbox" id="includeP5" checked></label>
+          </section>
+        </div>
       </aside>
 
       <section class="workspace">
@@ -62,15 +73,15 @@
           <form class="source-form" id="sourceForm">
             <label>
               Organization
-              <input id="organization" name="organization" type="text" value="umarko" autocomplete="off">
+              <input id="organization" name="organization" type="text" value="ApplicationFactory" autocomplete="off">
             </label>
             <label>
               Project
-              <input id="project" name="project" type="text" value="testgenerator" autocomplete="off">
+              <input id="project" name="project" type="text" value="RBAL" autocomplete="off">
             </label>
             <label>
               User Story ID
-              <input id="storyId" name="storyId" type="number" value="12345" min="1">
+              <input id="storyId" name="storyId" type="number" value="61029" min="1">
             </label>
             <label>
               Test Plan ID
@@ -80,29 +91,34 @@
               Test Suite ID
               <input id="testSuiteId" name="testSuiteId" type="number" value="2001" min="1">
             </label>
-            <label>
-              Max test cases
-              <input id="maxTestCases" name="maxTestCases" type="number" value="15" min="3" max="30">
-            </label>
           </form>
+
+          <div class="source-status" id="sourceStatus">Import the story before generating tests.</div>
 
           <div class="story-preview">
             <div>
               <span class="field-label">Story title</span>
-              <input id="storyTitle" type="text" value="As a retail user, I want to create a domestic payment">
+              <input id="storyTitle" type="text" value="">
             </div>
             <div>
               <span class="field-label">Acceptance criteria</span>
-              <textarea id="acceptanceCriteria" rows="7">User can create a domestic payment with valid beneficiary account, amount and reference.
-Mandatory fields are validated before submission.
-User receives a confirmation screen after successful submission.
-Payment is not submitted when balance is insufficient.
-All payment creation attempts are auditable.</textarea>
+              <textarea id="acceptanceCriteria" rows="7"></textarea>
             </div>
           </div>
 
+          <section class="attachment-panel is-hidden" id="attachmentPanel">
+            <div class="attachment-heading">
+              <div>
+                <h4>Imported attachments</h4>
+                <p>Remove files that should not be used for test generation.</p>
+              </div>
+            </div>
+            <div class="attachment-list" id="attachmentList"></div>
+          </section>
+
           <div class="actions">
-            <button class="primary-action" id="generateButton" type="button">Generate tests</button>
+            <button class="secondary-action" id="importStoryButton" type="button">Import story</button>
+            <button class="primary-action" id="generateButton" type="button" disabled>Generate tests</button>
             <button class="secondary-action" id="resetButton" type="button">Reset draft</button>
           </div>
         </section>
@@ -140,6 +156,14 @@ All payment creation attempts are auditable.</textarea>
               </thead>
               <tbody id="testList"></tbody>
             </table>
+          </div>
+
+          <div class="pagination-bar" id="paginationBar">
+            <span id="paginationInfo"></span>
+            <div>
+              <button class="compact-action" id="previousPageButton" type="button">Previous</button>
+              <button class="compact-action" id="nextPageButton" type="button">Next</button>
+            </div>
           </div>
 
           <div class="actions">
@@ -197,9 +221,11 @@ All payment creation attempts are auditable.</textarea>
               <label>
                 Priority
                 <select class="test-priority">
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
+                  <option>P1</option>
+                  <option>P2</option>
+                  <option>P3</option>
+                  <option>P4</option>
+                  <option>P5</option>
                 </select>
               </label>
               <button class="icon-button delete-test" type="button" aria-label="Delete test case">X</button>
