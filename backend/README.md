@@ -59,3 +59,13 @@ POST http://127.0.0.1:8000/api/imports/azure/dry-run
 
 The dry run validates the target Test Plan/Test Suite and returns the list of
 test cases that would be created. It does not create or update Azure DevOps data.
+
+Real Azure Test Plans import endpoint:
+
+```text
+POST http://127.0.0.1:8000/api/imports/azure
+```
+
+The real import creates Azure DevOps Test Case work items, links them to the
+source story, and adds them to the selected Test Suite. Use it only after a
+successful dry run.

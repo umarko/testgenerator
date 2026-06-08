@@ -11,7 +11,7 @@ from app.models import (
 )
 from app.services.azure_devops import get_azure_devops_connector
 from app.services.ai_generation import generate_ai_tests
-from app.services.azure_test_plans import dry_run_test_plan_import
+from app.services.azure_test_plans import dry_run_test_plan_import, import_test_cases_to_azure
 from app.services.importer import mock_import
 from app.services.test_generation import generate_mock_tests
 
@@ -63,3 +63,8 @@ def create_mock_import(request: ImportRequest) -> ImportResponse:
 @app.post("/api/imports/azure/dry-run", response_model=ImportDryRunResponse)
 def dry_run_azure_import(request: ImportRequest) -> ImportDryRunResponse:
     return dry_run_test_plan_import(request)
+
+
+@app.post("/api/imports/azure", response_model=ImportResponse)
+def create_azure_import(request: ImportRequest) -> ImportResponse:
+    return import_test_cases_to_azure(request)

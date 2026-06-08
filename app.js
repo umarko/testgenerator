@@ -9,7 +9,8 @@ const state = {
   storyImported: false,
   currentPage: 1,
   pageSize: 25,
-  attachments: []
+  attachments: [],
+  lastDryRunValid: false
 };
 
 const PAGE_SIZE = 25;
@@ -27,6 +28,7 @@ const elements = {
   resetButton: document.querySelector("#resetButton"),
   addTestButton: document.querySelector("#addTestButton"),
   mockImportButton: document.querySelector("#mockImportButton"),
+  realImportButton: document.querySelector("#realImportButton"),
   backToSourceButton: document.querySelector("#backToSourceButton"),
   backToReviewButton: document.querySelector("#backToReviewButton"),
   downloadJsonButton: document.querySelector("#downloadJsonButton"),
@@ -405,6 +407,8 @@ async function generateTests() {
 
   state.pageSize = PAGE_SIZE;
   state.currentPage = 1;
+  state.lastDryRunValid = false;
+  elements.realImportButton.disabled = true;
   elements.generateButton.disabled = true;
   elements.generateButton.textContent = "Generating...";
 
@@ -645,26 +649,32 @@ function renderTestRows(testCase, index) {
   detailRow.querySelector(".test-preconditions").value = testCase.preconditions.join("\n");
 
   detailRow.querySelector(".test-title").addEventListener("input", (event) => {
+    invalidateDryRun();
     state.testCases[index].title = event.target.value;
     titleCell.textContent = event.target.value;
   });
   detailRow.querySelector(".test-priority").addEventListener("change", (event) => {
+    invalidateDryRun();
     state.testCases[index].priority = event.target.value;
     priorityCell.textContent = event.target.value;
   });
   detailRow.querySelector(".test-category").addEventListener("change", (event) => {
+    invalidateDryRun();
     state.testCases[index].category = event.target.value;
     categoryCell.textContent = event.target.value;
   });
   detailRow.querySelector(".test-preconditions").addEventListener("input", (event) => {
+    invalidateDryRun();
     state.testCases[index].preconditions = splitLines(event.target.value);
   });
   detailRow.querySelector(".delete-test").addEventListener("click", () => {
+    invalidateDryRun();
     state.testCases.splice(index, 1);
     state.expandedTestIndex = null;
     renderReview();
   });
   detailRow.querySelector(".add-step").addEventListener("click", () => {
+    invalidateDryRun();
     state.testCases[index].steps.push({
       action: "New action",
       expectedResult: "Expected result"
@@ -687,17 +697,25 @@ function renderStepRow(step, testIndex, stepIndex) {
   row.querySelector(".step-action").value = step.action;
   row.querySelector(".step-expected").value = step.expectedResult;
   row.querySelector(".step-action").addEventListener("input", (event) => {
+    invalidateDryRun();
     state.testCases[testIndex].steps[stepIndex].action = event.target.value;
   });
   row.querySelector(".step-expected").addEventListener("input", (event) => {
+    invalidateDryRun();
     state.testCases[testIndex].steps[stepIndex].expectedResult = event.target.value;
   });
   row.querySelector(".delete-step").addEventListener("click", () => {
+    invalidateDryRun();
     state.testCases[testIndex].steps.splice(stepIndex, 1);
     renderReview();
   });
 
   return row;
+}
+
+function invalidateDryRun() {
+  state.lastDryRunValid = false;
+  elements.realImportButton.disabled = true;
 }
 
 function splitLines(value) {
@@ -708,6 +726,7 @@ function splitLines(value) {
 }
 
 function addEmptyTestCase() {
+  invalidateDryRun();
   state.testCases.push({
     title: "New test case",
     priority: "P3",
@@ -750,6 +769,8 @@ async function mockImport() {
     return;
   }
 
+  state.lastDryRunValid = false;
+  elements.realImportButton.disabled = true;
   elements.mockImportButton.disabled = true;
   elements.mockImportButton.textContent = "Validating...";
 
@@ -767,8 +788,45 @@ async function mockImport() {
   setStep("import");
 }
 
-async function requestBackendImport() {
-  const response = await fetch(`${API_BASE_URL}/imports/azure/dry-run`, {
+async function realAzureImport() {
+  const errors = validateBeforeImport();
+  if (errors.length) {
+    alert(errors.join("\n"));
+    return;
+  }
+  if (!state.lastDryRunValid) {
+    alert("Run a successful Azure dry run before real import.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `This will create ${state.testCases.length} real Azure DevOps test cases.\n\n` +
+      `Story ID: ${state.source.storyId}\n` +
+      `Test Plan ID: ${state.source.testPlanId}\n` +
+      `Test Suite ID: ${state.source.testSuiteId}\n\n` +
+      "Continue with real Azure import?"
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  elements.realImportButton.disabled = true;
+  elements.realImportButton.textContent = "Importing...";
+
+  try {
+    const response = await requestBackendImport("/imports/azure");
+    renderImportResult(response);
+    setStep("import");
+  } catch (error) {
+    alert(`Real Azure import failed. ${error.message}`);
+  } finally {
+    elements.realImportButton.disabled = false;
+    elements.realImportButton.textContent = "Real Azure import";
+  }
+}
+
+async function requestBackendImport(path = "/imports/azure/dry-run") {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -803,8 +861,10 @@ function renderImportResult(response) {
   const created = response.createdTestCases || response.plannedTestCases || [];
   const validations = response.validations || [];
   const isDryRun = Boolean(response.plannedTestCases);
+  state.lastDryRunValid = isDryRun ? response.status === "valid" : state.lastDryRunValid;
+  elements.realImportButton.disabled = !state.lastDryRunValid;
   elements.resultSummary.innerHTML = `
-    <strong>${isDryRun ? "Azure dry run completed" : `${created.length} test cases returned from backend mock import.`}</strong>
+    <strong>${isDryRun ? "Azure dry run completed" : `${created.length} test cases imported to Azure DevOps.`}</strong>
     <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
     ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}, suite ${escapeHtml(response.testSuiteId)}${response.testSuiteName ? ` (${escapeHtml(response.testSuiteName)})` : ""}.</p>` : ""}
   `;
@@ -881,6 +941,8 @@ function resetDraft() {
   state.expandedTestIndex = null;
   state.currentPage = 1;
   state.attachments = [];
+  state.lastDryRunValid = false;
+  elements.realImportButton.disabled = true;
   renderAttachments();
   setStoryImported(false, "Import the story before generating tests.");
   document.querySelector("#storyTitle").value = "";
@@ -947,6 +1009,7 @@ elements.generateButton.addEventListener("click", generateTests);
 elements.resetButton.addEventListener("click", resetDraft);
 elements.addTestButton.addEventListener("click", addEmptyTestCase);
 elements.mockImportButton.addEventListener("click", mockImport);
+elements.realImportButton.addEventListener("click", realAzureImport);
 elements.backToSourceButton.addEventListener("click", () => setStep("source"));
 elements.backToReviewButton.addEventListener("click", () => setStep("review"));
 elements.downloadJsonButton.addEventListener("click", downloadJson);

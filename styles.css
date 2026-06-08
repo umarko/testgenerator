@@ -342,6 +342,7 @@ textarea:focus {
 
 .primary-action,
 .secondary-action,
+.danger-action,
 .icon-button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -382,6 +383,23 @@ textarea:focus {
 
 .secondary-action:hover {
   background: var(--surface-2);
+}
+
+.danger-action {
+  background: #ffffff;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.danger-action:hover:not(:disabled) {
+  background: #fff2f0;
+}
+
+.danger-action:disabled,
+.primary-action:disabled,
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .icon-button {
