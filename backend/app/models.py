@@ -28,6 +28,7 @@ class AzureSource(BaseModel):
 class StoryContext(BaseModel):
     title: str = ""
     acceptance_criteria: str = Field(default="", alias="acceptanceCriteria")
+    additional_context: str = Field(default="", alias="additionalContext")
     attachments: list["WorkItemAttachment"] = Field(default_factory=list)
 
 

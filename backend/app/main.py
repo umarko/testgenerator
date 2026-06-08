@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import GenerationRequest, GenerationResponse, ImportRequest, ImportResponse, WorkItemResponse
 from app.services.azure_devops import get_azure_devops_connector
+from app.services.ai_generation import generate_ai_tests
 from app.services.importer import mock_import
 from app.services.test_generation import generate_mock_tests
 
@@ -10,7 +11,7 @@ from app.services.test_generation import generate_mock_tests
 app = FastAPI(
     title="QA Test Case Generator API",
     version="0.1.0",
-    description="Mock backend API for the QA Test Case Generator MVP.",
+    description="Backend API for Azure DevOps story import and AI-assisted QA test generation.",
 )
 
 app.add_middleware(
@@ -39,6 +40,11 @@ def create_mock_generation(request: GenerationRequest) -> GenerationResponse:
         request.story.title = work_item.title
         request.story.acceptance_criteria = work_item.acceptance_criteria or work_item.description
     return generate_mock_tests(request)
+
+
+@app.post("/api/generations/ai", response_model=GenerationResponse)
+def create_ai_generation(request: GenerationRequest) -> GenerationResponse:
+    return generate_ai_tests(request)
 
 
 @app.post("/api/imports/mock", response_model=ImportResponse)

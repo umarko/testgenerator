@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     azure_devops_project: str = Field(default="", alias="AZURE_DEVOPS_PROJECT")
     azure_devops_api_version: str = Field(default="5.0", alias="AZURE_DEVOPS_API_VERSION")
     azure_devops_pat: str = Field(default="", alias="AZURE_DEVOPS_PAT")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4.1", alias="OPENAI_MODEL")
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -24,4 +26,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

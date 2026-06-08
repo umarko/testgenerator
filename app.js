@@ -69,6 +69,7 @@ function readSource() {
     testSuiteId: document.querySelector("#testSuiteId").value.trim(),
     storyTitle: document.querySelector("#storyTitle").value.trim(),
     acceptanceCriteria: document.querySelector("#acceptanceCriteria").value.trim(),
+    additionalContext: document.querySelector("#additionalContext").value.trim(),
     attachments: state.attachments,
     coverage: Object.fromEntries(
       coverageInputs.map((input) => [input.id.replace("include", "").toLowerCase(), input.checked])
@@ -411,8 +412,9 @@ async function generateTests() {
     const response = await requestBackendGeneration(state.source);
     applyGenerationResponse(response);
   } catch (error) {
-    console.warn("Backend generation unavailable, using frontend fallback.", error);
-    applyFrontendGenerationFallback();
+    console.error("AI generation failed.", error);
+    alert(`AI generation failed. ${error.message}`);
+    return;
   } finally {
     elements.generateButton.disabled = false;
     elements.generateButton.textContent = "Generate tests";
@@ -462,7 +464,7 @@ async function requestBackendStory(storyId) {
 }
 
 async function requestBackendGeneration(source) {
-  const response = await fetch(`${API_BASE_URL}/generations/mock`, {
+  const response = await fetch(`${API_BASE_URL}/generations/ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -478,6 +480,7 @@ async function requestBackendGeneration(source) {
       story: {
         title: source.storyTitle,
         acceptanceCriteria: source.acceptanceCriteria,
+        additionalContext: source.additionalContext,
         attachments: source.attachments
       },
       figma: {
@@ -495,7 +498,16 @@ async function requestBackendGeneration(source) {
   });
 
   if (!response.ok) {
-    throw new Error(`Generation API returned ${response.status}`);
+    let message = `Generation API returned ${response.status}`;
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload.detail) {
+        message = errorPayload.detail;
+      }
+    } catch (error) {
+      console.warn("Generation API error response was not JSON.", error);
+    }
+    throw new Error(message);
   }
 
   return response.json();
@@ -851,6 +863,7 @@ function resetDraft() {
   setStoryImported(false, "Import the story before generating tests.");
   document.querySelector("#storyTitle").value = "";
   document.querySelector("#acceptanceCriteria").value = "";
+  document.querySelector("#additionalContext").value = "";
   setStep("source");
 }
 

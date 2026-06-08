@@ -2,7 +2,7 @@
 
 FastAPI backend for the QA Test Case Generator MVP.
 
-The first version is intentionally a mock backend. It keeps the same API shape we will later use for Azure DevOps, AI generation, Azure import, and Figma design context.
+The backend supports Azure DevOps story import, OpenAI-powered test generation, and mock endpoints for local development.
 
 ## Local setup
 
@@ -14,6 +14,13 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Create a local `.env` file from `.env.example` and set:
+
+```text
+OPENAI_API_KEY=your-local-api-key
+OPENAI_MODEL=gpt-4.1
 ```
 
 Health check:
@@ -28,9 +35,18 @@ Mock generation endpoint:
 POST http://127.0.0.1:8000/api/generations/mock
 ```
 
+AI generation endpoint:
+
+```text
+POST http://127.0.0.1:8000/api/generations/ai
+```
+
+Successful AI generation responses are cached locally in `backend/local_data/`.
+The cache is ignored by Git and is reused for the same story, selected attachments,
+coverage options, and priority options.
+
 Mock import endpoint:
 
 ```text
 POST http://127.0.0.1:8000/api/imports/mock
 ```
-
