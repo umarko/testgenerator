@@ -751,7 +751,7 @@ async function mockImport() {
   }
 
   elements.mockImportButton.disabled = true;
-  elements.mockImportButton.textContent = "Importing...";
+  elements.mockImportButton.textContent = "Validating...";
 
   try {
     const response = await requestBackendImport();
@@ -761,14 +761,14 @@ async function mockImport() {
     renderFrontendImportFallback();
   } finally {
     elements.mockImportButton.disabled = false;
-    elements.mockImportButton.textContent = "Mock import";
+    elements.mockImportButton.textContent = "Dry run Azure import";
   }
 
   setStep("import");
 }
 
 async function requestBackendImport() {
-  const response = await fetch(`${API_BASE_URL}/imports/mock`, {
+  const response = await fetch(`${API_BASE_URL}/imports/azure/dry-run`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -784,26 +784,48 @@ async function requestBackendImport() {
   });
 
   if (!response.ok) {
-    throw new Error(`Import API returned ${response.status}`);
+    let message = `Import API returned ${response.status}`;
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload.detail) {
+        message = errorPayload.detail;
+      }
+    } catch (error) {
+      console.warn("Import API error response was not JSON.", error);
+    }
+    throw new Error(message);
   }
 
   return response.json();
 }
 
 function renderImportResult(response) {
-  const created = response.createdTestCases || [];
+  const created = response.createdTestCases || response.plannedTestCases || [];
+  const validations = response.validations || [];
+  const isDryRun = Boolean(response.plannedTestCases);
   elements.resultSummary.innerHTML = `
-    <strong>${created.length} test cases returned from backend mock import.</strong>
+    <strong>${isDryRun ? "Azure dry run completed" : `${created.length} test cases returned from backend mock import.`}</strong>
     <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
+    ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}, suite ${escapeHtml(response.testSuiteId)}${response.testSuiteName ? ` (${escapeHtml(response.testSuiteName)})` : ""}.</p>` : ""}
   `;
 
   elements.resultList.replaceChildren();
+  validations.forEach((validation) => {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    row.innerHTML = `
+      <span>${escapeHtml(validation.name)}: ${escapeHtml(validation.message)}</span>
+      <span class="result-id">${escapeHtml(validation.status)}</span>
+    `;
+    elements.resultList.appendChild(row);
+  });
+
   created.forEach((item) => {
     const row = document.createElement("div");
     row.className = "result-row";
     row.innerHTML = `
       <span>${escapeHtml(item.title)}</span>
-      <span class="result-id">Mock ID ${item.id}</span>
+      <span class="result-id">${isDryRun ? `Would create #${item.sequence}` : `Mock ID ${item.id}`}</span>
     `;
     elements.resultList.appendChild(row);
   });

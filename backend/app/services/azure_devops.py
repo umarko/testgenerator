@@ -26,6 +26,14 @@ class AzureDevOpsConnector:
     def create_test_case(self, payload: dict) -> dict:
         raise NotImplementedError("Azure DevOps import is not implemented yet.")
 
+    def get_test_suite(self, plan_id: str, suite_id: str) -> dict:
+        self._validate_settings()
+        return self._get_json(self._test_suite_url(plan_id, suite_id))
+
+    def get_test_suites_for_plan(self, plan_id: str) -> dict:
+        self._validate_settings()
+        return self._get_json(self._test_suites_url(plan_id))
+
     def _work_item_url(self, work_item_id: str) -> str:
         base_url = self.settings.azure_devops_base_url.rstrip("/")
         collection = quote(self.settings.azure_devops_collection.strip("/"))
@@ -34,6 +42,26 @@ class AzureDevOpsConnector:
         return (
             f"{base_url}/{collection}/{project}/_apis/wit/workitems/{quote(work_item_id)}"
             f"?$expand=all&api-version={api_version}"
+        )
+
+    def _test_suites_url(self, plan_id: str) -> str:
+        base_url = self.settings.azure_devops_base_url.rstrip("/")
+        collection = quote(self.settings.azure_devops_collection.strip("/"))
+        project = quote(self.settings.azure_devops_project.strip("/"))
+        api_version = quote(self.settings.azure_devops_api_version)
+        return (
+            f"{base_url}/{collection}/{project}/_apis/test/Plans/{quote(plan_id)}/suites"
+            f"?api-version={api_version}"
+        )
+
+    def _test_suite_url(self, plan_id: str, suite_id: str) -> str:
+        base_url = self.settings.azure_devops_base_url.rstrip("/")
+        collection = quote(self.settings.azure_devops_collection.strip("/"))
+        project = quote(self.settings.azure_devops_project.strip("/"))
+        api_version = quote(self.settings.azure_devops_api_version)
+        return (
+            f"{base_url}/{collection}/{project}/_apis/test/Plans/{quote(plan_id)}/suites/{quote(suite_id)}"
+            f"?api-version={api_version}"
         )
 
     def _get_json(self, url: str) -> dict:

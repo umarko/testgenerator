@@ -50,3 +50,12 @@ Mock import endpoint:
 ```text
 POST http://127.0.0.1:8000/api/imports/mock
 ```
+
+Azure Test Plans dry run endpoint:
+
+```text
+POST http://127.0.0.1:8000/api/imports/azure/dry-run
+```
+
+The dry run validates the target Test Plan/Test Suite and returns the list of
+test cases that would be created. It does not create or update Azure DevOps data.

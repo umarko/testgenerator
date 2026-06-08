@@ -1,9 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.models import GenerationRequest, GenerationResponse, ImportRequest, ImportResponse, WorkItemResponse
+from app.models import (
+    GenerationRequest,
+    GenerationResponse,
+    ImportDryRunResponse,
+    ImportRequest,
+    ImportResponse,
+    WorkItemResponse,
+)
 from app.services.azure_devops import get_azure_devops_connector
 from app.services.ai_generation import generate_ai_tests
+from app.services.azure_test_plans import dry_run_test_plan_import
 from app.services.importer import mock_import
 from app.services.test_generation import generate_mock_tests
 
@@ -50,3 +58,8 @@ def create_ai_generation(request: GenerationRequest) -> GenerationResponse:
 @app.post("/api/imports/mock", response_model=ImportResponse)
 def create_mock_import(request: ImportRequest) -> ImportResponse:
     return mock_import(request)
+
+
+@app.post("/api/imports/azure/dry-run", response_model=ImportDryRunResponse)
+def dry_run_azure_import(request: ImportRequest) -> ImportDryRunResponse:
+    return dry_run_test_plan_import(request)

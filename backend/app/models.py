@@ -130,3 +130,32 @@ class ImportResponse(BaseModel):
     status: str
     message: str
     created_test_cases: list[ImportedTestCase] = Field(alias="createdTestCases")
+
+
+class DryRunValidation(BaseModel):
+    name: str
+    status: str
+    message: str
+
+
+class DryRunPlannedTestCase(BaseModel):
+    sequence: int
+    title: str
+    category: str
+    priority: str
+    step_count: int = Field(alias="stepCount")
+    would_create_work_item: bool = Field(default=True, alias="wouldCreateWorkItem")
+    would_link_to_story: bool = Field(default=True, alias="wouldLinkToStory")
+    would_add_to_suite: bool = Field(default=True, alias="wouldAddToSuite")
+
+
+class ImportDryRunResponse(BaseModel):
+    status: str
+    message: str
+    source_work_item_id: str = Field(alias="sourceWorkItemId")
+    test_plan_id: str = Field(alias="testPlanId")
+    test_suite_id: str = Field(alias="testSuiteId")
+    test_plan_name: str = Field(default="", alias="testPlanName")
+    test_suite_name: str = Field(default="", alias="testSuiteName")
+    validations: list[DryRunValidation]
+    planned_test_cases: list[DryRunPlannedTestCase] = Field(alias="plannedTestCases")
