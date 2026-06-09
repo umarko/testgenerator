@@ -171,11 +171,41 @@
             <table class="test-table" aria-label="Generated test cases">
               <thead>
                 <tr>
-                  <th scope="col">Test case No</th>
+                  <th scope="col">No</th>
                   <th scope="col">Title</th>
-                  <th scope="col">Platform</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Priority</th>
+                  <th scope="col">
+                    Platform
+                    <select class="table-filter" id="platformFilter" aria-label="Filter by platform">
+                      <option value="">All</option>
+                      <option>Web</option>
+                      <option>Android</option>
+                      <option>iOS</option>
+                      <option>API</option>
+                    </select>
+                  </th>
+                  <th scope="col">
+                    Category
+                    <select class="table-filter" id="categoryFilter" aria-label="Filter by category">
+                      <option value="">All</option>
+                      <option>Positive</option>
+                      <option>Negative</option>
+                      <option>Boundary</option>
+                      <option>Security</option>
+                      <option>Audit</option>
+                      <option>Regression</option>
+                    </select>
+                  </th>
+                  <th scope="col">
+                    Priority
+                    <select class="table-filter" id="priorityFilter" aria-label="Filter by priority">
+                      <option value="">All</option>
+                      <option>P1</option>
+                      <option>P2</option>
+                      <option>P3</option>
+                      <option>P4</option>
+                      <option>P5</option>
+                    </select>
+                  </th>
                   <th scope="col">Details</th>
                 </tr>
               </thead>

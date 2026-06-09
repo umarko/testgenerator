@@ -10,7 +10,12 @@ const state = {
   currentPage: 1,
   pageSize: 25,
   attachments: [],
-  lastDryRunValid: false
+  lastDryRunValid: false,
+  reviewFilters: {
+    platform: "",
+    category: "",
+    priority: ""
+  }
 };
 
 const PAGE_SIZE = 25;
@@ -40,6 +45,9 @@ const elements = {
   paginationInfo: document.querySelector("#paginationInfo"),
   previousPageButton: document.querySelector("#previousPageButton"),
   nextPageButton: document.querySelector("#nextPageButton"),
+  platformFilter: document.querySelector("#platformFilter"),
+  categoryFilter: document.querySelector("#categoryFilter"),
+  priorityFilter: document.querySelector("#priorityFilter"),
   attachmentPanel: document.querySelector("#attachmentPanel"),
   attachmentList: document.querySelector("#attachmentList"),
   resultSummary: document.querySelector("#resultSummary"),
@@ -546,6 +554,7 @@ async function requestBackendGeneration(source) {
 }
 
 function applyGenerationResponse(response) {
+  resetReviewFilters();
   state.assumptions = response.assumptions || [];
   state.questions = response.questionsForBA || [];
   state.testCases = (response.testCases || []).map((testCase) => ({
@@ -563,6 +572,7 @@ function applyGenerationResponse(response) {
 }
 
 function applyFrontendGenerationFallback() {
+  resetReviewFilters();
   state.assumptions = [
     "User is authenticated before opening the payment flow.",
     "Domestic payment limits are configured outside this story.",
@@ -618,33 +628,47 @@ function renderReview() {
   renderList(elements.questionsList, state.questions);
   elements.testList.replaceChildren();
 
+  const filteredEntries = getFilteredTestEntries();
   const totalPages = getTotalPages();
   state.currentPage = Math.min(Math.max(state.currentPage, 1), totalPages);
   const startIndex = (state.currentPage - 1) * state.pageSize;
-  const visibleTests = state.testCases.slice(startIndex, startIndex + state.pageSize);
+  const visibleEntries = filteredEntries.slice(startIndex, startIndex + state.pageSize);
 
-  visibleTests.forEach((testCase, visibleIndex) => {
-    const absoluteIndex = startIndex + visibleIndex;
+  visibleEntries.forEach(({ testCase, index: absoluteIndex }) => {
     renderTestRows(testCase, absoluteIndex).forEach((row) => elements.testList.appendChild(row));
   });
 
   renderPagination();
-  elements.appStatus.textContent = `${state.testCases.length} tests`;
+  elements.appStatus.textContent = `${filteredEntries.length}/${state.testCases.length} tests`;
 }
 
 function renderPagination() {
+  const filteredCount = getFilteredTestEntries().length;
   const totalPages = getTotalPages();
-  const start = state.testCases.length ? (state.currentPage - 1) * state.pageSize + 1 : 0;
-  const end = Math.min(state.currentPage * state.pageSize, state.testCases.length);
+  const start = filteredCount ? (state.currentPage - 1) * state.pageSize + 1 : 0;
+  const end = Math.min(state.currentPage * state.pageSize, filteredCount);
 
-  elements.paginationInfo.textContent = `Showing ${start}-${end} of ${state.testCases.length} tests. Page ${state.currentPage} of ${totalPages}.`;
+  elements.paginationInfo.textContent = `Showing ${start}-${end} of ${filteredCount} filtered tests. Total ${state.testCases.length}. Page ${state.currentPage} of ${totalPages}.`;
   elements.previousPageButton.disabled = state.currentPage <= 1;
   elements.nextPageButton.disabled = state.currentPage >= totalPages;
-  elements.paginationBar.classList.toggle("is-hidden", state.testCases.length <= state.pageSize);
+  elements.paginationBar.classList.toggle("is-hidden", filteredCount <= state.pageSize);
 }
 
 function getTotalPages() {
-  return Math.max(1, Math.ceil(state.testCases.length / state.pageSize));
+  return Math.max(1, Math.ceil(getFilteredTestEntries().length / state.pageSize));
+}
+
+function getFilteredTestEntries() {
+  return state.testCases
+    .map((testCase, index) => ({ testCase, index }))
+    .filter(({ testCase }) => {
+      const platform = testCase.platform || "Web";
+      return (
+        (!state.reviewFilters.platform || platform === state.reviewFilters.platform) &&
+        (!state.reviewFilters.category || testCase.category === state.reviewFilters.category) &&
+        (!state.reviewFilters.priority || testCase.priority === state.reviewFilters.priority)
+      );
+    });
 }
 
 function renderTestRows(testCase, index) {
@@ -753,6 +777,17 @@ function renderStepRow(step, testIndex, stepIndex) {
 function invalidateDryRun() {
   state.lastDryRunValid = false;
   elements.realImportButton.disabled = true;
+}
+
+function resetReviewFilters() {
+  state.reviewFilters = {
+    platform: "",
+    category: "",
+    priority: ""
+  };
+  elements.platformFilter.value = "";
+  elements.categoryFilter.value = "";
+  elements.priorityFilter.value = "";
 }
 
 function splitLines(value) {
@@ -1009,6 +1044,7 @@ function resetDraft() {
   state.attachments = [];
   state.lastDryRunValid = false;
   elements.realImportButton.disabled = true;
+  resetReviewFilters();
   renderAttachments();
   setStoryImported(false, "Import the story before generating tests.");
   document.querySelector("#storyTitle").value = "";
@@ -1105,6 +1141,18 @@ elements.realImportButton.addEventListener("click", realAzureImport);
 elements.backToSourceButton.addEventListener("click", () => setStep("source"));
 elements.backToReviewButton.addEventListener("click", () => setStep("review"));
 elements.downloadJsonButton.addEventListener("click", downloadJson);
+[
+  [elements.platformFilter, "platform"],
+  [elements.categoryFilter, "category"],
+  [elements.priorityFilter, "priority"]
+].forEach(([select, key]) => {
+  select.addEventListener("change", () => {
+    state.reviewFilters[key] = select.value;
+    state.currentPage = 1;
+    state.expandedTestIndex = null;
+    renderReview();
+  });
+});
 elements.previousPageButton.addEventListener("click", () => {
   state.currentPage = Math.max(1, state.currentPage - 1);
   state.expandedTestIndex = null;

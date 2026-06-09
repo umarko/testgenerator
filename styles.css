@@ -481,9 +481,20 @@ textarea:focus {
   font-weight: 700;
 }
 
+.table-filter {
+  display: block;
+  width: 100%;
+  min-height: 26px;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .test-table th:nth-child(1),
 .test-table td:nth-child(1) {
-  width: 96px;
+  width: 54px;
   text-align: right;
 }
 
