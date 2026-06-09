@@ -165,6 +165,7 @@ class AzureDevOpsConnector:
     def _test_case_patch(self, test_case: TestCase, source_work_item_id: str) -> list[dict]:
         tags = set(test_case.tags)
         tags.add("AI Generated")
+        tags.add(test_case.platform)
         tags.add(test_case.category)
         tags.add(test_case.priority)
         patch = [
@@ -210,6 +211,7 @@ class AzureDevOpsConnector:
         coverage = ", ".join(test_case.coverage or [test_case.category])
         return (
             f"<p><strong>Category:</strong> {escape(test_case.category)}</p>"
+            f"<p><strong>Platform:</strong> {escape(test_case.platform)}</p>"
             f"<p><strong>Priority:</strong> {escape(test_case.priority)}</p>"
             f"<p><strong>Coverage:</strong> {escape(coverage)}</p>"
             f"<p><strong>Preconditions:</strong></p><ul>{preconditions}</ul>"

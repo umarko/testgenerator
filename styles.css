@@ -126,7 +126,7 @@ button {
 
 .sidebar-filter-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(80px, 0.65fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
@@ -490,12 +490,14 @@ textarea:focus {
 .test-table th:nth-child(3),
 .test-table td:nth-child(3),
 .test-table th:nth-child(4),
-.test-table td:nth-child(4) {
+.test-table td:nth-child(4),
+.test-table th:nth-child(5),
+.test-table td:nth-child(5) {
   width: 112px;
 }
 
-.test-table th:nth-child(5),
-.test-table td:nth-child(5) {
+.test-table th:nth-child(6),
+.test-table td:nth-child(6) {
   width: 92px;
   text-align: center;
 }
@@ -522,7 +524,7 @@ textarea:focus {
 
 .test-detail-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 130px 110px 34px;
+  grid-template-columns: minmax(220px, 1fr) 115px 130px 110px 34px;
   gap: 8px;
   align-items: end;
   margin-bottom: 8px;
@@ -623,7 +625,7 @@ textarea:focus {
   }
 
   .test-detail-grid {
-    grid-template-columns: 1fr 130px 110px 34px;
+    grid-template-columns: 1fr 115px 130px 110px 34px;
   }
 }
 

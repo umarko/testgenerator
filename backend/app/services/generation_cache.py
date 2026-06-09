@@ -46,6 +46,8 @@ def _cache_key(request: GenerationRequest) -> str:
         "attachments": included_attachments,
         "coverage": request.generation_policy.coverage.model_dump(),
         "priorities": request.generation_policy.priorities.model_dump(),
+        "platforms": request.generation_policy.platforms.model_dump(),
+        "maxTestCasesPerPlatform": request.generation_policy.max_test_cases_per_platform,
     }
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]

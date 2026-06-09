@@ -1,7 +1,7 @@
 from app.models import GenerationRequest, GenerationResponse, TestCase, TestStep
 
 
-MAX_TESTS_PER_STORY = 150
+MAX_TESTS_PER_PLATFORM = 50
 
 
 def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
@@ -290,7 +290,7 @@ def generate_mock_tests(request: GenerationRequest) -> GenerationResponse:
         ]
     )
 
-    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases)
+    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases_per_platform)
 
     return GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
@@ -473,7 +473,7 @@ def _generate_wise_transfer_tests(request: GenerationRequest) -> GenerationRespo
         ),
     ]
 
-    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases)
+    selected_tests = _limit_tests(_filter_tests(tests, request), policy.max_test_cases_per_platform)
 
     return GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
@@ -516,7 +516,7 @@ def _test_case(
 
 
 def _limit_tests(tests: list[TestCase], max_count: int) -> list[TestCase]:
-    count = min(max(max_count, 0), MAX_TESTS_PER_STORY)
+    count = min(max(max_count, 0), MAX_TESTS_PER_PLATFORM)
     return tests[:count]
 
 
@@ -547,10 +547,23 @@ def _filter_tests(tests: list[TestCase], request: GenerationRequest) -> list[Tes
     if priorities.p5:
         allowed_priorities.add("P5")
 
+    platforms = request.generation_policy.platforms
+    allowed_platforms = set()
+    if platforms.web:
+        allowed_platforms.add("Web")
+    if platforms.android:
+        allowed_platforms.add("Android")
+    if platforms.ios:
+        allowed_platforms.add("iOS")
+    if platforms.api:
+        allowed_platforms.add("API")
+
     return [
         test
         for test in tests
-        if test.category in allowed_categories and test.priority in allowed_priorities
+        if test.category in allowed_categories
+        and test.priority in allowed_priorities
+        and test.platform in allowed_platforms
     ]
 
 

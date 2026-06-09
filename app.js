@@ -14,7 +14,7 @@ const state = {
 };
 
 const PAGE_SIZE = 25;
-const MAX_TESTS_PER_STORY = 150;
+const MAX_TESTS_PER_PLATFORM = 50;
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
@@ -62,13 +62,27 @@ const priorityInputs = [
   "includeP5"
 ].map((id) => document.querySelector(`#${id}`));
 
+const platformInputs = [
+  "includeWeb",
+  "includeAndroid",
+  "includeIos",
+  "includeApi"
+].map((id) => document.querySelector(`#${id}`));
+
 function readSource() {
+  const suiteIdsByPlatform = {
+    Web: document.querySelector("#webSuiteId").value.trim(),
+    Android: document.querySelector("#androidSuiteId").value.trim(),
+    iOS: document.querySelector("#iosSuiteId").value.trim(),
+    API: document.querySelector("#apiSuiteId").value.trim()
+  };
   return {
     organization: document.querySelector("#organization").value.trim(),
     project: document.querySelector("#project").value.trim(),
     storyId: document.querySelector("#storyId").value.trim(),
     testPlanId: document.querySelector("#testPlanId").value.trim(),
-    testSuiteId: document.querySelector("#testSuiteId").value.trim(),
+    testSuiteId: suiteIdsByPlatform.Web,
+    suiteIdsByPlatform,
     storyTitle: document.querySelector("#storyTitle").value.trim(),
     acceptanceCriteria: document.querySelector("#acceptanceCriteria").value.trim(),
     additionalContext: document.querySelector("#additionalContext").value.trim(),
@@ -78,6 +92,12 @@ function readSource() {
     ),
     priorities: Object.fromEntries(
       priorityInputs.map((input) => [input.id.replace("include", "").toLowerCase(), input.checked])
+    ),
+    platforms: Object.fromEntries(
+      platformInputs.map((input) => {
+        const key = input.id.replace("include", "").toLowerCase();
+        return [key === "ios" ? "ios" : key, input.checked];
+      })
     )
   };
 }
@@ -395,7 +415,13 @@ function createBaseTests(source) {
     }
   );
 
-  return limitTests(filterTestsByPriority(filterTestsByCoverage(tests, source.coverage), source.priorities), MAX_TESTS_PER_STORY);
+  return limitTests(
+    filterTestsByPlatform(
+      filterTestsByPriority(filterTestsByCoverage(tests, source.coverage), source.priorities),
+      source.platforms
+    ),
+    MAX_TESTS_PER_PLATFORM
+  );
 }
 
 async function generateTests() {
@@ -496,7 +522,9 @@ async function requestBackendGeneration(source) {
         domain: "fintech",
         testStyle: "manual",
         coverage: source.coverage,
-        priorities: source.priorities
+        priorities: source.priorities,
+        platforms: source.platforms,
+        maxTestCasesPerPlatform: MAX_TESTS_PER_PLATFORM
       }
     })
   });
@@ -522,6 +550,7 @@ function applyGenerationResponse(response) {
   state.questions = response.questionsForBA || [];
   state.testCases = (response.testCases || []).map((testCase) => ({
     title: testCase.title,
+    platform: testCase.platform || "Web",
     priority: testCase.priority,
     category: testCase.category,
     preconditions: testCase.preconditions || [],
@@ -625,11 +654,13 @@ function renderTestRows(testCase, index) {
   const detailRow = fragment.querySelector(".test-detail-row");
   const toggleButton = fragment.querySelector(".toggle-test");
   const titleCell = fragment.querySelector(".test-summary-title");
+  const platformCell = fragment.querySelector(".test-summary-platform");
   const categoryCell = fragment.querySelector(".test-summary-category");
   const priorityCell = fragment.querySelector(".test-summary-priority");
 
   summaryRow.querySelector(".test-number").textContent = index + 1;
   titleCell.textContent = testCase.title;
+  platformCell.textContent = testCase.platform || "Web";
   categoryCell.textContent = testCase.category;
   priorityCell.textContent = testCase.priority;
 
@@ -644,6 +675,7 @@ function renderTestRows(testCase, index) {
   });
 
   detailRow.querySelector(".test-title").value = testCase.title;
+  detailRow.querySelector(".test-platform").value = testCase.platform || "Web";
   detailRow.querySelector(".test-priority").value = testCase.priority;
   detailRow.querySelector(".test-category").value = testCase.category;
   detailRow.querySelector(".test-preconditions").value = testCase.preconditions.join("\n");
@@ -657,6 +689,11 @@ function renderTestRows(testCase, index) {
     invalidateDryRun();
     state.testCases[index].priority = event.target.value;
     priorityCell.textContent = event.target.value;
+  });
+  detailRow.querySelector(".test-platform").addEventListener("change", (event) => {
+    invalidateDryRun();
+    state.testCases[index].platform = event.target.value;
+    platformCell.textContent = event.target.value;
   });
   detailRow.querySelector(".test-category").addEventListener("change", (event) => {
     invalidateDryRun();
@@ -729,6 +766,7 @@ function addEmptyTestCase() {
   invalidateDryRun();
   state.testCases.push({
     title: "New test case",
+    platform: "Web",
     priority: "P3",
     category: "Regression",
     preconditions: ["User is authenticated"],
@@ -746,9 +784,14 @@ function addEmptyTestCase() {
 
 function validateBeforeImport() {
   const errors = [];
+  const platformsInTests = new Set();
   state.testCases.forEach((testCase, index) => {
+    platformsInTests.add(testCase.platform || "Web");
     if (!testCase.title.trim()) {
       errors.push(`Test case ${index + 1} needs a title.`);
+    }
+    if (!(testCase.platform || "").trim()) {
+      errors.push(`Test case ${index + 1} needs a platform.`);
     }
     if (!testCase.steps.length) {
       errors.push(`Test case ${index + 1} needs at least one step.`);
@@ -759,10 +802,16 @@ function validateBeforeImport() {
       }
     });
   });
+  platformsInTests.forEach((platform) => {
+    if (!state.source.suiteIdsByPlatform?.[platform]) {
+      errors.push(`${platform} tests need a ${platform} Suite ID before import.`);
+    }
+  });
   return errors;
 }
 
 async function mockImport() {
+  state.source = { ...state.source, ...readSource() };
   const errors = validateBeforeImport();
   if (errors.length) {
     alert(errors.join("\n"));
@@ -789,6 +838,7 @@ async function mockImport() {
 }
 
 async function realAzureImport() {
+  state.source = { ...state.source, ...readSource() };
   const errors = validateBeforeImport();
   if (errors.length) {
     alert(errors.join("\n"));
@@ -803,7 +853,7 @@ async function realAzureImport() {
     `This will create ${state.testCases.length} real Azure DevOps test cases.\n\n` +
       `Story ID: ${state.source.storyId}\n` +
       `Test Plan ID: ${state.source.testPlanId}\n` +
-      `Test Suite ID: ${state.source.testSuiteId}\n\n` +
+      `Suite mapping:\n${formatSuiteMapping(state.source.suiteIdsByPlatform)}\n\n` +
       "Continue with real Azure import?"
   );
   if (!confirmed) {
@@ -835,7 +885,8 @@ async function requestBackendImport(path = "/imports/azure/dry-run") {
       sourceWorkItemId: state.source.storyId,
       target: {
         testPlanId: state.source.testPlanId,
-        testSuiteId: state.source.testSuiteId
+        testSuiteId: state.source.testSuiteId,
+        suiteIdsByPlatform: state.source.suiteIdsByPlatform
       },
       testCases: state.testCases
     })
@@ -866,7 +917,7 @@ function renderImportResult(response) {
   elements.resultSummary.innerHTML = `
     <strong>${isDryRun ? "Azure dry run completed" : `${created.length} test cases imported to Azure DevOps.`}</strong>
     <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
-    ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}, suite ${escapeHtml(response.testSuiteId)}${response.testSuiteName ? ` (${escapeHtml(response.testSuiteName)})` : ""}.</p>` : ""}
+    ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}. ${escapeHtml(formatDryRunSuiteNames(response))}</p>` : ""}
   `;
 
   elements.resultList.replaceChildren();
@@ -885,10 +936,24 @@ function renderImportResult(response) {
     row.className = "result-row";
     row.innerHTML = `
       <span>${escapeHtml(item.title)}</span>
-      <span class="result-id">${isDryRun ? `Would create #${item.sequence}` : `Mock ID ${item.id}`}</span>
+      <span class="result-id">${escapeHtml(item.platform || "Web")} - ${isDryRun ? `Would create #${item.sequence}` : `Azure ID ${item.id}`}</span>
     `;
     elements.resultList.appendChild(row);
   });
+}
+
+function formatSuiteMapping(mapping) {
+  return Object.entries(mapping || {})
+    .filter(([, suiteId]) => suiteId)
+    .map(([platform, suiteId]) => `${platform}: ${suiteId}`)
+    .join("\n");
+}
+
+function formatDryRunSuiteNames(response) {
+  const suiteNames = response.suiteNamesByPlatform || {};
+  return Object.entries(suiteNames)
+    .map(([platform, name]) => `${platform} suite: ${name}`)
+    .join(" | ");
 }
 
 function renderFrontendImportFallback() {
@@ -896,12 +961,13 @@ function renderFrontendImportFallback() {
   const created = state.testCases.map((testCase, index) => ({
     id: baseId + index,
     title: testCase.title,
+    platform: testCase.platform || "Web",
     category: testCase.category
   }));
 
   elements.resultSummary.innerHTML = `
     <strong>${created.length} test cases ready for Azure DevOps import.</strong>
-    <p>Target plan ${escapeHtml(state.source.testPlanId)} and suite ${escapeHtml(state.source.testSuiteId)}.</p>
+    <p>Target plan ${escapeHtml(state.source.testPlanId)}. ${escapeHtml(formatSuiteMapping(state.source.suiteIdsByPlatform))}</p>
   `;
 
   elements.resultList.replaceChildren();
@@ -952,7 +1018,16 @@ function resetDraft() {
 }
 
 function limitTests(tests, maxCount) {
-  return tests.slice(0, Math.min(Math.max(Number(maxCount) || 0, 0), MAX_TESTS_PER_STORY));
+  const platformCounts = new Map();
+  return tests.filter((test) => {
+    const platform = test.platform || "Web";
+    const count = platformCounts.get(platform) || 0;
+    if (count >= maxCount) {
+      return false;
+    }
+    platformCounts.set(platform, count + 1);
+    return true;
+  });
 }
 
 function filterTestsByCoverage(tests, coverage) {
@@ -995,6 +1070,23 @@ function filterTestsByPriority(tests, priorities) {
   return tests.filter((test) => allowedPriorities.has(test.priority));
 }
 
+function filterTestsByPlatform(tests, platforms) {
+  const allowedPlatforms = new Set();
+  if (platforms.web) {
+    allowedPlatforms.add("Web");
+  }
+  if (platforms.android) {
+    allowedPlatforms.add("Android");
+  }
+  if (platforms.ios) {
+    allowedPlatforms.add("iOS");
+  }
+  if (platforms.api) {
+    allowedPlatforms.add("API");
+  }
+  return tests.filter((test) => allowedPlatforms.has(test.platform || "Web"));
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1030,6 +1122,21 @@ elements.nextPageButton.addEventListener("click", () => {
     renderAttachments();
     setStoryImported(false, "Story source changed. Import the story again before generating tests.");
   });
+});
+
+[
+  "testPlanId",
+  "webSuiteId",
+  "androidSuiteId",
+  "iosSuiteId",
+  "apiSuiteId",
+  "includeWeb",
+  "includeAndroid",
+  "includeIos",
+  "includeApi"
+].forEach((id) => {
+  document.querySelector(`#${id}`).addEventListener("input", invalidateDryRun);
+  document.querySelector(`#${id}`).addEventListener("change", invalidateDryRun);
 });
 
 document.querySelectorAll(".step").forEach((button) => {

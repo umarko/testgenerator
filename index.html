@@ -50,6 +50,14 @@
             <label>P4 <input type="checkbox" id="includeP4" checked></label>
             <label>P5 <input type="checkbox" id="includeP5" checked></label>
           </section>
+
+          <section class="sidebar-panel">
+            <h2>Platforms</h2>
+            <label>Web <input type="checkbox" id="includeWeb" checked></label>
+            <label>Android <input type="checkbox" id="includeAndroid" checked></label>
+            <label>iOS <input type="checkbox" id="includeIos" checked></label>
+            <label>API <input type="checkbox" id="includeApi"></label>
+          </section>
         </div>
       </aside>
 
@@ -88,8 +96,20 @@
               <input id="testPlanId" name="testPlanId" type="number" value="1001" min="1">
             </label>
             <label>
-              Test Suite ID
-              <input id="testSuiteId" name="testSuiteId" type="number" value="2001" min="1">
+              Web Suite ID
+              <input id="webSuiteId" name="webSuiteId" type="number" value="2001" min="1">
+            </label>
+            <label>
+              Android Suite ID
+              <input id="androidSuiteId" name="androidSuiteId" type="number" min="1">
+            </label>
+            <label>
+              iOS Suite ID
+              <input id="iosSuiteId" name="iosSuiteId" type="number" min="1">
+            </label>
+            <label>
+              API Suite ID
+              <input id="apiSuiteId" name="apiSuiteId" type="number" min="1">
             </label>
           </form>
 
@@ -153,6 +173,7 @@
                 <tr>
                   <th scope="col">Test case No</th>
                   <th scope="col">Title</th>
+                  <th scope="col">Platform</th>
                   <th scope="col">Category</th>
                   <th scope="col">Priority</th>
                   <th scope="col">Details</th>
@@ -181,7 +202,7 @@
           <div class="panel-heading">
             <div>
               <h3>Import result</h3>
-              <p>Mock result for the MVP UI. Azure write integration comes next.</p>
+              <p>Azure validation and import results.</p>
             </div>
           </div>
           <div class="result-summary" id="resultSummary"></div>
@@ -198,6 +219,7 @@
       <tr class="test-summary-row">
         <td class="test-number"></td>
         <td class="test-summary-title"></td>
+        <td class="test-summary-platform"></td>
         <td class="test-summary-category"></td>
         <td class="test-summary-priority"></td>
         <td>
@@ -205,12 +227,21 @@
         </td>
       </tr>
       <tr class="test-detail-row is-hidden">
-        <td colspan="5">
+        <td colspan="6">
           <article class="test-detail-panel">
             <div class="test-detail-grid">
               <label class="title-field">
                 Title
                 <input class="test-title" type="text" aria-label="Test title">
+              </label>
+              <label>
+                Platform
+                <select class="test-platform">
+                  <option>Web</option>
+                  <option>Android</option>
+                  <option>iOS</option>
+                  <option>API</option>
+                </select>
               </label>
               <label>
                 Category

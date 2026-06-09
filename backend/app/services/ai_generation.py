@@ -7,7 +7,7 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 from app.models import GenerationRequest, GenerationResponse, TestCase
 from app.settings import get_settings
 from app.services.generation_cache import load_cached_generation, save_cached_generation
-from app.services.test_generation import MAX_TESTS_PER_STORY
+from app.services.test_generation import MAX_TESTS_PER_PLATFORM
 
 
 ATTACHMENT_TEXT_LIMIT = 12000
@@ -16,8 +16,9 @@ ATTACHMENT_TEXT_LIMIT = 12000
 def generate_ai_tests(request: GenerationRequest) -> GenerationResponse:
     allowed_categories = _allowed_categories(request)
     allowed_priorities = _allowed_priorities(request)
+    allowed_platforms = _allowed_platforms(request)
 
-    if not allowed_categories or not allowed_priorities:
+    if not allowed_categories or not allowed_priorities or not allowed_platforms:
         return _empty_response(request)
 
     cached_response = load_cached_generation(request)
@@ -38,7 +39,7 @@ def generate_ai_tests(request: GenerationRequest) -> GenerationResponse:
             model=settings.openai_model,
             input=[
                 {"role": "system", "content": _system_prompt()},
-                {"role": "user", "content": _user_prompt(request, allowed_categories, allowed_priorities)},
+                {"role": "user", "content": _user_prompt(request, allowed_categories, allowed_priorities, allowed_platforms)},
             ],
             text={
                 "format": {
@@ -63,7 +64,7 @@ def generate_ai_tests(request: GenerationRequest) -> GenerationResponse:
         TestCase.model_validate(test_case)
         for test_case in payload.get("testCases", [])
     ]
-    test_cases = _filter_and_limit(test_cases, allowed_categories, allowed_priorities)
+    test_cases = _filter_and_limit(test_cases, allowed_categories, allowed_priorities, allowed_platforms)
 
     generation_response = GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
@@ -86,6 +87,9 @@ def _system_prompt() -> str:
         Do not invent product behavior. If important business rules are missing, add questions for BA instead of guessing.
         Respect the selected Category/Coverage and Priority filters strictly.
         The maximum number of test cases is a cap, not a target. Generate only the number of tests that are genuinely useful.
+        Each test case must target exactly one platform: Web, Android, iOS, or API.
+        Create platform-specific variants only when behavior, UI, validation, navigation, integration, or risk differs by platform.
+        Do not duplicate identical tests across platforms unless separate execution per platform is genuinely needed.
 
         Priority definitions:
         P1: Critical path tests for core business flow, money movement, irreversible actions, blocking validations, security-critical access, or defects that would stop production use.
@@ -108,6 +112,7 @@ def _user_prompt(
     request: GenerationRequest,
     allowed_categories: set[str],
     allowed_priorities: set[str],
+    allowed_platforms: set[str],
 ) -> str:
     return dedent(
         f"""
@@ -134,11 +139,14 @@ def _user_prompt(
         Selected priorities:
         {", ".join(sorted(allowed_priorities))}
 
+        Selected platforms:
+        {", ".join(sorted(allowed_platforms))}
+
         Generation constraints:
-        - Return at most {MAX_TESTS_PER_STORY} test cases.
-        - Return only selected categories and selected priorities.
+        - Return at most {MAX_TESTS_PER_PLATFORM} test cases per selected platform.
+        - Return only selected categories, selected priorities, and selected platforms.
         - Use priorities according to the supplied QA priority definitions.
-        - Do not create 150 tests by default. Use the amount justified by the story and documentation.
+        - Do not create the maximum number by default. Use the amount justified by the story and documentation.
         - Each test case must have clear preconditions and at least one action/expected result step.
         - Prefer concise, reviewable manual tests suitable for import into Azure DevOps Test Plans.
         """
@@ -193,25 +201,45 @@ def _allowed_priorities(request: GenerationRequest) -> set[str]:
     return allowed
 
 
+def _allowed_platforms(request: GenerationRequest) -> set[str]:
+    platforms = request.generation_policy.platforms
+    allowed = set()
+    if platforms.web:
+        allowed.add("Web")
+    if platforms.android:
+        allowed.add("Android")
+    if platforms.ios:
+        allowed.add("iOS")
+    if platforms.api:
+        allowed.add("API")
+    return allowed
+
+
 def _filter_and_limit(
     test_cases: list[TestCase],
     allowed_categories: set[str],
     allowed_priorities: set[str],
+    allowed_platforms: set[str],
 ) -> list[TestCase]:
-    filtered = [
-        test_case
-        for test_case in test_cases
-        if test_case.category in allowed_categories
-        and test_case.priority in allowed_priorities
-        and test_case.steps
-    ]
-    return filtered[:MAX_TESTS_PER_STORY]
+    filtered = []
+    platform_counts = {platform: 0 for platform in allowed_platforms}
+    for test_case in test_cases:
+        if (
+            test_case.category in allowed_categories
+            and test_case.priority in allowed_priorities
+            and test_case.platform in allowed_platforms
+            and test_case.steps
+            and platform_counts[test_case.platform] < MAX_TESTS_PER_PLATFORM
+        ):
+            filtered.append(test_case)
+            platform_counts[test_case.platform] += 1
+    return filtered
 
 
 def _empty_response(request: GenerationRequest) -> GenerationResponse:
     return GenerationResponse(
         sourceWorkItemId=request.azure.story_id,
-        summary="No test cases generated because no category or priority was selected.",
+        summary="No test cases generated because no category, priority, or platform was selected.",
         assumptions=[],
         questionsForBA=[],
         testCases=[],
@@ -265,6 +293,7 @@ def _generation_schema() -> dict:
                     "additionalProperties": False,
                     "required": [
                         "title",
+                        "platform",
                         "priority",
                         "category",
                         "preconditions",
@@ -274,6 +303,7 @@ def _generation_schema() -> dict:
                     ],
                     "properties": {
                         "title": {"type": "string"},
+                        "platform": {"type": "string", "enum": ["Web", "Android", "iOS", "API"]},
                         "priority": {"type": "string", "enum": ["P1", "P2", "P3", "P4", "P5"]},
                         "category": {
                             "type": "string",

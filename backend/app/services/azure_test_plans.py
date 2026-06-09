@@ -20,8 +20,9 @@ def dry_run_test_plan_import(
 
     plan_name = ""
     suite_name = ""
+    suite_names_by_platform = {}
     if _is_valid_so_far(validations):
-        plan_name, suite_name = _validate_azure_target(request, connector, validations)
+        plan_name, suite_name, suite_names_by_platform = _validate_azure_target(request, connector, validations)
     if _is_valid_so_far(validations) and request.test_cases:
         _validate_test_case_creation(request, connector, validations)
 
@@ -29,6 +30,7 @@ def dry_run_test_plan_import(
         DryRunPlannedTestCase(
             sequence=index + 1,
             title=test_case.title,
+            platform=test_case.platform,
             category=test_case.category,
             priority=test_case.priority,
             stepCount=len(test_case.steps),
@@ -56,6 +58,7 @@ def dry_run_test_plan_import(
         testSuiteId=request.target.test_suite_id,
         testPlanName=plan_name,
         testSuiteName=suite_name,
+        suiteNamesByPlatform=suite_names_by_platform,
         validations=validations,
         plannedTestCases=planned,
     )
@@ -83,15 +86,13 @@ def import_test_cases_to_azure(
                 request.source_work_item_id,
             )
             test_case_id = int(created_work_item["id"])
-            connector.add_test_case_to_suite(
-                request.target.test_plan_id,
-                request.target.test_suite_id,
-                test_case_id,
-            )
+            suite_id = _suite_id_for_platform(request, test_case.platform)
+            connector.add_test_case_to_suite(request.target.test_plan_id, suite_id, test_case_id)
             imported.append(
                 ImportedTestCase(
                     id=test_case_id,
                     title=test_case.title,
+                    platform=test_case.platform,
                     category=test_case.category,
                     priority=test_case.priority,
                     status="Created and added to Azure Test Suite",
@@ -124,7 +125,7 @@ def import_test_cases_to_azure(
         status = "imported"
         message = (
             f"{len(imported)} test cases were created in Azure DevOps and added to "
-            f"plan {request.target.test_plan_id}, suite {request.target.test_suite_id}."
+            f"plan {request.target.test_plan_id}."
         )
 
     return ImportResponse(
@@ -154,10 +155,10 @@ def _validate_request(request: ImportRequest) -> list[DryRunValidation]:
     )
     validations.append(
         _validation(
-            "Test Suite ID",
-            bool(request.target.test_suite_id.strip()),
-            f"Test Suite #{request.target.test_suite_id} will be validated in Azure DevOps.",
-            "Test Suite ID is required.",
+            "Platform suite mapping",
+            _has_all_required_suite_ids(request),
+            "Every platform present in the test set has a target Test Suite ID.",
+            "Each platform present in the test set must have a target Test Suite ID.",
         )
     )
     validations.append(
@@ -185,9 +186,10 @@ def _validate_azure_target(
     request: ImportRequest,
     connector: AzureDevOpsConnector,
     validations: list[DryRunValidation],
-) -> tuple[str, str]:
+) -> tuple[str, str, dict[str, str]]:
     plan_name = ""
     suite_name = ""
+    suite_names_by_platform = {}
 
     try:
         suites_payload = connector.get_test_suites_for_plan(request.target.test_plan_id)
@@ -211,35 +213,37 @@ def _validate_azure_target(
                 message=f"Could not read Test Plan #{request.target.test_plan_id}: {exc.detail}",
             )
         )
-        return plan_name, suite_name
+        return plan_name, suite_name, suite_names_by_platform
 
-    try:
-        suite_payload = connector.get_test_suite(
-            request.target.test_plan_id,
-            request.target.test_suite_id,
-        )
-        suite_name = suite_payload.get("name", "")
-        plan_name = plan_name or (suite_payload.get("plan") or {}).get("name", "")
-        validations.append(
-            DryRunValidation(
-                name="Azure Test Suite",
-                status="valid",
-                message=(
-                    f"Test Suite #{request.target.test_suite_id}"
-                    f"{f' ({suite_name})' if suite_name else ''} exists in the selected plan."
-                ),
+    for platform in _platforms_in_tests(request):
+        suite_id = _suite_id_for_platform(request, platform)
+        try:
+            suite_payload = connector.get_test_suite(request.target.test_plan_id, suite_id)
+            current_suite_name = suite_payload.get("name", "")
+            suite_names_by_platform[platform] = current_suite_name
+            if not suite_name:
+                suite_name = current_suite_name
+            plan_name = plan_name or (suite_payload.get("plan") or {}).get("name", "")
+            validations.append(
+                DryRunValidation(
+                    name=f"Azure Test Suite - {platform}",
+                    status="valid",
+                    message=(
+                        f"{platform} Test Suite #{suite_id}"
+                        f"{f' ({current_suite_name})' if current_suite_name else ''} exists in the selected plan."
+                    ),
+                )
             )
-        )
-    except HTTPException as exc:
-        validations.append(
-            DryRunValidation(
-                name="Azure Test Suite",
-                status="invalid",
-                message=f"Could not read Test Suite #{request.target.test_suite_id}: {exc.detail}",
+        except HTTPException as exc:
+            validations.append(
+                DryRunValidation(
+                    name=f"Azure Test Suite - {platform}",
+                    status="invalid",
+                    message=f"Could not read {platform} Test Suite #{suite_id}: {exc.detail}",
+                )
             )
-        )
 
-    return plan_name, suite_name
+    return plan_name, suite_name, suite_names_by_platform
 
 
 def _validate_test_case_creation(
@@ -270,6 +274,8 @@ def _first_invalid_test_case(request: ImportRequest) -> str:
     for index, test_case in enumerate(request.test_cases, start=1):
         if not test_case.title.strip():
             return f"Test case {index} is missing a title."
+        if not test_case.platform.strip():
+            return f"Test case {index} is missing a platform."
         if not test_case.priority.strip():
             return f"Test case {index} is missing a priority."
         if not test_case.category.strip():
@@ -280,6 +286,27 @@ def _first_invalid_test_case(request: ImportRequest) -> str:
             if not step.action.strip() or not step.expected_result.strip():
                 return f"Test case {index}, step {step_index} is incomplete."
     return ""
+
+
+def _platforms_in_tests(request: ImportRequest) -> list[str]:
+    seen = []
+    for test_case in request.test_cases:
+        if test_case.platform not in seen:
+            seen.append(test_case.platform)
+    return seen
+
+
+def _suite_id_for_platform(request: ImportRequest, platform: str) -> str:
+    return (
+        request.target.suite_ids_by_platform.get(platform)
+        or request.target.suite_ids_by_platform.get(platform.lower())
+        or request.target.test_suite_id
+        or ""
+    ).strip()
+
+
+def _has_all_required_suite_ids(request: ImportRequest) -> bool:
+    return all(_suite_id_for_platform(request, platform) for platform in _platforms_in_tests(request))
 
 
 def _validation(name: str, condition: bool, valid_message: str, invalid_message: str) -> DryRunValidation:

@@ -17,6 +17,13 @@ class PriorityOptions(BaseModel):
     p5: bool = True
 
 
+class PlatformOptions(BaseModel):
+    web: bool = True
+    android: bool = True
+    ios: bool = True
+    api: bool = False
+
+
 class AzureSource(BaseModel):
     organization: str = ""
     project: str = ""
@@ -41,9 +48,10 @@ class FigmaContext(BaseModel):
 class GenerationPolicy(BaseModel):
     domain: str = "fintech"
     test_style: str = Field(default="manual", alias="testStyle")
-    max_test_cases: int = Field(default=150, alias="maxTestCases", ge=1, le=150)
+    max_test_cases_per_platform: int = Field(default=50, alias="maxTestCasesPerPlatform", ge=1, le=50)
     coverage: CoverageOptions = Field(default_factory=CoverageOptions)
     priorities: PriorityOptions = Field(default_factory=PriorityOptions)
+    platforms: PlatformOptions = Field(default_factory=PlatformOptions)
 
 
 class GenerationRequest(BaseModel):
@@ -90,6 +98,7 @@ class TestStep(BaseModel):
 
 class TestCase(BaseModel):
     title: str
+    platform: str = "Web"
     priority: str
     category: str
     preconditions: list[str]
@@ -110,6 +119,7 @@ class GenerationResponse(BaseModel):
 class ImportTarget(BaseModel):
     test_plan_id: str = Field(alias="testPlanId")
     test_suite_id: str = Field(alias="testSuiteId")
+    suite_ids_by_platform: dict[str, str] = Field(default_factory=dict, alias="suiteIdsByPlatform")
 
 
 class ImportRequest(BaseModel):
@@ -121,6 +131,7 @@ class ImportRequest(BaseModel):
 class ImportedTestCase(BaseModel):
     id: int
     title: str
+    platform: str = "Web"
     category: str
     priority: str
     status: str = "Ready for Azure DevOps import"
@@ -141,6 +152,7 @@ class DryRunValidation(BaseModel):
 class DryRunPlannedTestCase(BaseModel):
     sequence: int
     title: str
+    platform: str = "Web"
     category: str
     priority: str
     step_count: int = Field(alias="stepCount")
@@ -157,5 +169,6 @@ class ImportDryRunResponse(BaseModel):
     test_suite_id: str = Field(alias="testSuiteId")
     test_plan_name: str = Field(default="", alias="testPlanName")
     test_suite_name: str = Field(default="", alias="testSuiteName")
+    suite_names_by_platform: dict[str, str] = Field(default_factory=dict, alias="suiteNamesByPlatform")
     validations: list[DryRunValidation]
     planned_test_cases: list[DryRunPlannedTestCase] = Field(alias="plannedTestCases")
