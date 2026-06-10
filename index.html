@@ -167,6 +167,58 @@
             </div>
           </div>
 
+          <section class="refinement-panel">
+            <div class="refinement-heading">
+              <div>
+                <h4>AI refinement</h4>
+                <p>Use QA review notes to regenerate the full test set.</p>
+              </div>
+              <button class="primary-action" id="refineButton" type="button">Refine with AI</button>
+            </div>
+            <div class="refinement-grid">
+              <label>
+                Clarified business rules
+                <textarea id="clarifiedBusinessRules" rows="3" placeholder="Example: Threshold is 50,000 RON. ZIP Code is optional."></textarea>
+              </label>
+              <label>
+                Coverage gaps
+                <textarea id="coverageGaps" rows="3" placeholder="Example: Add boundary tests around threshold and timeout/rejection statuses."></textarea>
+              </label>
+              <label>
+                Tests to avoid or change
+                <textarea id="testsToAvoidOrChange" rows="3" placeholder="Example: Reduce duplicate Android/iOS tests. Do not generate API tests."></textarea>
+              </label>
+              <label>
+                Additional instruction
+                <textarea id="additionalRefinementInstruction" rows="3" placeholder="Example: Focus on regression risk around existing domestic payment flow."></textarea>
+              </label>
+            </div>
+          </section>
+
+          <section class="revision-panel is-hidden" id="revisionPanel">
+            <div class="revision-heading">
+              <div>
+                <h4>Revision history</h4>
+                <p>Local comparison between AI-generated revisions.</p>
+              </div>
+              <span id="revisionSummary"></span>
+            </div>
+            <div class="revision-grid">
+              <div>
+                <h5>Added</h5>
+                <ul id="revisionAddedList"></ul>
+              </div>
+              <div>
+                <h5>Removed</h5>
+                <ul id="revisionRemovedList"></ul>
+              </div>
+              <div>
+                <h5>Changed</h5>
+                <ul id="revisionChangedList"></ul>
+              </div>
+            </div>
+          </section>
+
           <div class="test-table-wrap">
             <table class="test-table" aria-label="Generated test cases">
               <thead>

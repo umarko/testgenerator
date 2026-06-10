@@ -438,6 +438,91 @@ textarea:focus {
   margin-bottom: 2px;
 }
 
+.refinement-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.refinement-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.refinement-heading h4,
+.refinement-heading p {
+  margin: 0;
+}
+
+.refinement-heading p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.refinement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.revision-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.revision-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.revision-heading h4,
+.revision-heading p,
+.revision-grid h5 {
+  margin: 0;
+}
+
+.revision-heading p,
+.revision-grid li {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#revisionSummary {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.revision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.revision-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 10px;
+}
+
+.revision-grid ul {
+  margin: 6px 0 0;
+  padding-left: 17px;
+}
+
 .test-table-wrap {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -647,6 +732,8 @@ textarea:focus {
 
   .topbar,
   .panel-heading,
+  .refinement-heading,
+  .revision-heading,
   .actions,
   .result-row {
     align-items: stretch;
@@ -658,6 +745,8 @@ textarea:focus {
   }
 
   .step-row,
+  .refinement-grid,
+  .revision-grid,
   .test-detail-grid {
     grid-template-columns: 1fr;
   }

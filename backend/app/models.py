@@ -116,6 +116,20 @@ class GenerationResponse(BaseModel):
     generation_source: str = Field(default="backend-mock", alias="generationSource")
 
 
+class RefinementNotes(BaseModel):
+    clarified_business_rules: str = Field(default="", alias="clarifiedBusinessRules")
+    coverage_gaps: str = Field(default="", alias="coverageGaps")
+    tests_to_avoid_or_change: str = Field(default="", alias="testsToAvoidOrChange")
+    additional_instruction: str = Field(default="", alias="additionalInstruction")
+
+
+class RefinementRequest(GenerationRequest):
+    current_test_cases: list[TestCase] = Field(default_factory=list, alias="currentTestCases")
+    current_assumptions: list[str] = Field(default_factory=list, alias="currentAssumptions")
+    current_questions_for_ba: list[str] = Field(default_factory=list, alias="currentQuestionsForBA")
+    refinement_notes: RefinementNotes = Field(default_factory=RefinementNotes, alias="refinementNotes")
+
+
 class ImportTarget(BaseModel):
     test_plan_id: str = Field(alias="testPlanId")
     test_suite_id: str = Field(alias="testSuiteId")

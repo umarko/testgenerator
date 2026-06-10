@@ -15,7 +15,9 @@ const state = {
     platform: "",
     category: "",
     priority: ""
-  }
+  },
+  revisions: [],
+  latestDiff: null
 };
 
 const PAGE_SIZE = 25;
@@ -32,6 +34,7 @@ const elements = {
   generateButton: document.querySelector("#generateButton"),
   resetButton: document.querySelector("#resetButton"),
   addTestButton: document.querySelector("#addTestButton"),
+  refineButton: document.querySelector("#refineButton"),
   mockImportButton: document.querySelector("#mockImportButton"),
   realImportButton: document.querySelector("#realImportButton"),
   backToSourceButton: document.querySelector("#backToSourceButton"),
@@ -39,6 +42,11 @@ const elements = {
   downloadJsonButton: document.querySelector("#downloadJsonButton"),
   assumptionsList: document.querySelector("#assumptionsList"),
   questionsList: document.querySelector("#questionsList"),
+  revisionPanel: document.querySelector("#revisionPanel"),
+  revisionSummary: document.querySelector("#revisionSummary"),
+  revisionAddedList: document.querySelector("#revisionAddedList"),
+  revisionRemovedList: document.querySelector("#revisionRemovedList"),
+  revisionChangedList: document.querySelector("#revisionChangedList"),
   testList: document.querySelector("#testList"),
   sourceStatus: document.querySelector("#sourceStatus"),
   paginationBar: document.querySelector("#paginationBar"),
@@ -553,8 +561,114 @@ async function requestBackendGeneration(source) {
   return response.json();
 }
 
-function applyGenerationResponse(response) {
+function readRefinementNotes() {
+  return {
+    clarifiedBusinessRules: document.querySelector("#clarifiedBusinessRules").value.trim(),
+    coverageGaps: document.querySelector("#coverageGaps").value.trim(),
+    testsToAvoidOrChange: document.querySelector("#testsToAvoidOrChange").value.trim(),
+    additionalInstruction: document.querySelector("#additionalRefinementInstruction").value.trim()
+  };
+}
+
+function hasRefinementNotes(notes) {
+  return Object.values(notes).some(Boolean);
+}
+
+async function refineTests() {
+  state.source = { ...state.source, ...readSource() };
+  const refinementNotes = readRefinementNotes();
+  if (!state.testCases.length) {
+    alert("Generate tests before using AI refinement.");
+    return;
+  }
+  if (!hasRefinementNotes(refinementNotes)) {
+    alert("Add at least one refinement note before sending to AI.");
+    return;
+  }
+
+  elements.refineButton.disabled = true;
+  elements.refineButton.textContent = "Refining...";
+
+  try {
+    const previousSnapshot = createRevisionSnapshot("Before refinement", state.testCases);
+    const response = await requestBackendRefinement(state.source, refinementNotes);
+    applyGenerationResponse(response, { preserveRevisionHistory: true });
+    const currentSnapshot = createRevisionSnapshot("Refined with AI", state.testCases);
+    state.revisions.push(previousSnapshot, currentSnapshot);
+    state.latestDiff = diffTestCases(previousSnapshot.testCases, currentSnapshot.testCases);
+    invalidateDryRun();
+    state.currentPage = 1;
+    state.expandedTestIndex = null;
+    renderReview();
+  } catch (error) {
+    alert(`AI refinement failed. ${error.message}`);
+  } finally {
+    elements.refineButton.disabled = false;
+    elements.refineButton.textContent = "Refine with AI";
+  }
+}
+
+async function requestBackendRefinement(source, refinementNotes) {
+  const response = await fetch(`${API_BASE_URL}/generations/refine`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      azure: {
+        organization: source.organization,
+        project: source.project,
+        storyId: source.storyId,
+        testPlanId: source.testPlanId,
+        testSuiteId: source.testSuiteId
+      },
+      story: {
+        title: source.storyTitle,
+        acceptanceCriteria: source.acceptanceCriteria,
+        additionalContext: source.additionalContext,
+        attachments: source.attachments
+      },
+      figma: {
+        enabled: false,
+        links: [],
+        screens: []
+      },
+      generationPolicy: {
+        domain: "fintech",
+        testStyle: "manual",
+        coverage: source.coverage,
+        priorities: source.priorities,
+        platforms: source.platforms,
+        maxTestCasesPerPlatform: MAX_TESTS_PER_PLATFORM
+      },
+      currentTestCases: state.testCases,
+      currentAssumptions: state.assumptions,
+      currentQuestionsForBA: state.questions,
+      refinementNotes
+    })
+  });
+
+  if (!response.ok) {
+    let message = `Refinement API returned ${response.status}`;
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload.detail) {
+        message = errorPayload.detail;
+      }
+    } catch (error) {
+      console.warn("Refinement API error response was not JSON.", error);
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+function applyGenerationResponse(response, options = {}) {
   resetReviewFilters();
+  if (!options.preserveRevisionHistory) {
+    resetRevisionHistory();
+  }
   state.assumptions = response.assumptions || [];
   state.questions = response.questionsForBA || [];
   state.testCases = (response.testCases || []).map((testCase) => ({
@@ -626,6 +740,7 @@ function renderAttachments() {
 function renderReview() {
   renderList(elements.assumptionsList, state.assumptions);
   renderList(elements.questionsList, state.questions);
+  renderRevisionHistory();
   elements.testList.replaceChildren();
 
   const filteredEntries = getFilteredTestEntries();
@@ -669,6 +784,129 @@ function getFilteredTestEntries() {
         (!state.reviewFilters.priority || testCase.priority === state.reviewFilters.priority)
       );
     });
+}
+
+function createRevisionSnapshot(label, testCases) {
+  return {
+    label,
+    createdAt: new Date().toISOString(),
+    testCases: cloneTestCases(testCases)
+  };
+}
+
+function cloneTestCases(testCases) {
+  return testCases.map((testCase) => ({
+    title: testCase.title,
+    platform: testCase.platform || "Web",
+    priority: testCase.priority,
+    category: testCase.category,
+    preconditions: [...(testCase.preconditions || [])],
+    steps: (testCase.steps || []).map((step) => ({
+      action: step.action,
+      expectedResult: step.expectedResult
+    }))
+  }));
+}
+
+function diffTestCases(previousTests, currentTests) {
+  const previousMap = new Map(previousTests.map((testCase) => [testCaseDiffKey(testCase), testCase]));
+  const currentMap = new Map(currentTests.map((testCase) => [testCaseDiffKey(testCase), testCase]));
+  const added = [];
+  const removed = [];
+  const changed = [];
+
+  currentMap.forEach((testCase, key) => {
+    const previous = previousMap.get(key);
+    if (!previous) {
+      added.push(testCase);
+      return;
+    }
+    const changes = describeTestChanges(previous, testCase);
+    if (changes.length) {
+      changed.push({ before: previous, after: testCase, changes });
+    }
+  });
+
+  previousMap.forEach((testCase, key) => {
+    if (!currentMap.has(key)) {
+      removed.push(testCase);
+    }
+  });
+
+  return {
+    added,
+    removed,
+    changed,
+    unchanged: currentTests.length - added.length - changed.length
+  };
+}
+
+function testCaseDiffKey(testCase) {
+  return `${testCase.platform || "Web"}::${normalizeTitle(testCase.title)}`;
+}
+
+function normalizeTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function describeTestChanges(previous, current) {
+  const changes = [];
+  if (previous.priority !== current.priority) {
+    changes.push(`Priority ${previous.priority} -> ${current.priority}`);
+  }
+  if (previous.category !== current.category) {
+    changes.push(`Category ${previous.category} -> ${current.category}`);
+  }
+  if (JSON.stringify(previous.preconditions || []) !== JSON.stringify(current.preconditions || [])) {
+    changes.push("Preconditions changed");
+  }
+  if (JSON.stringify(previous.steps || []) !== JSON.stringify(current.steps || [])) {
+    changes.push("Steps changed");
+  }
+  return changes;
+}
+
+function renderRevisionHistory() {
+  const diff = state.latestDiff;
+  elements.revisionPanel.classList.toggle("is-hidden", !diff);
+  if (!diff) {
+    return;
+  }
+
+  elements.revisionSummary.textContent = `Added ${diff.added.length} | Removed ${diff.removed.length} | Changed ${diff.changed.length} | Unchanged ${diff.unchanged}`;
+  renderRevisionList(elements.revisionAddedList, diff.added.map(formatTestCaseRef));
+  renderRevisionList(elements.revisionRemovedList, diff.removed.map(formatTestCaseRef));
+  renderRevisionList(
+    elements.revisionChangedList,
+    diff.changed.map((item) => `${formatTestCaseRef(item.after)} - ${item.changes.join(", ")}`)
+  );
+}
+
+function renderRevisionList(listElement, items) {
+  listElement.replaceChildren();
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.textContent = "None";
+    listElement.appendChild(li);
+    return;
+  }
+  items.slice(0, 10).forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    listElement.appendChild(li);
+  });
+  if (items.length > 10) {
+    const li = document.createElement("li");
+    li.textContent = `+${items.length - 10} more`;
+    listElement.appendChild(li);
+  }
+}
+
+function formatTestCaseRef(testCase) {
+  return `[${testCase.platform || "Web"}][${testCase.category}][${testCase.priority}] ${testCase.title}`;
 }
 
 function renderTestRows(testCase, index) {
@@ -788,6 +1026,18 @@ function resetReviewFilters() {
   elements.platformFilter.value = "";
   elements.categoryFilter.value = "";
   elements.priorityFilter.value = "";
+}
+
+function resetRevisionHistory() {
+  state.revisions = [];
+  state.latestDiff = null;
+}
+
+function resetRefinementNotes() {
+  document.querySelector("#clarifiedBusinessRules").value = "";
+  document.querySelector("#coverageGaps").value = "";
+  document.querySelector("#testsToAvoidOrChange").value = "";
+  document.querySelector("#additionalRefinementInstruction").value = "";
 }
 
 function splitLines(value) {
@@ -1043,8 +1293,10 @@ function resetDraft() {
   state.currentPage = 1;
   state.attachments = [];
   state.lastDryRunValid = false;
+  resetRevisionHistory();
   elements.realImportButton.disabled = true;
   resetReviewFilters();
+  resetRefinementNotes();
   renderAttachments();
   setStoryImported(false, "Import the story before generating tests.");
   document.querySelector("#storyTitle").value = "";
@@ -1136,6 +1388,7 @@ elements.importStoryButton.addEventListener("click", importStory);
 elements.generateButton.addEventListener("click", generateTests);
 elements.resetButton.addEventListener("click", resetDraft);
 elements.addTestButton.addEventListener("click", addEmptyTestCase);
+elements.refineButton.addEventListener("click", refineTests);
 elements.mockImportButton.addEventListener("click", mockImport);
 elements.realImportButton.addEventListener("click", realAzureImport);
 elements.backToSourceButton.addEventListener("click", () => setStep("source"));

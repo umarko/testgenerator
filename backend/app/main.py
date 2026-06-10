@@ -7,10 +7,11 @@ from app.models import (
     ImportDryRunResponse,
     ImportRequest,
     ImportResponse,
+    RefinementRequest,
     WorkItemResponse,
 )
 from app.services.azure_devops import get_azure_devops_connector
-from app.services.ai_generation import generate_ai_tests
+from app.services.ai_generation import generate_ai_tests, refine_ai_tests
 from app.services.azure_test_plans import dry_run_test_plan_import, import_test_cases_to_azure
 from app.services.importer import mock_import
 from app.services.test_generation import generate_mock_tests
@@ -53,6 +54,11 @@ def create_mock_generation(request: GenerationRequest) -> GenerationResponse:
 @app.post("/api/generations/ai", response_model=GenerationResponse)
 def create_ai_generation(request: GenerationRequest) -> GenerationResponse:
     return generate_ai_tests(request)
+
+
+@app.post("/api/generations/refine", response_model=GenerationResponse)
+def refine_generation(request: RefinementRequest) -> GenerationResponse:
+    return refine_ai_tests(request)
 
 
 @app.post("/api/imports/mock", response_model=ImportResponse)
