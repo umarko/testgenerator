@@ -545,6 +545,107 @@ textarea:focus {
   gap: 8px;
 }
 
+.import-scope-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.import-scope-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.import-scope-heading h4,
+.import-scope-heading p,
+.scope-group h5 {
+  margin: 0;
+}
+
+.import-scope-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+#importScopeTotal {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.import-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 132px)) minmax(360px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.scope-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 8px;
+}
+
+.scope-group h5 {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.scope-group label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.scope-summary {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.scope-table {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.scope-table th,
+.scope-table td {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: right;
+}
+
+.scope-table th {
+  background: #eef4f2;
+  color: #2d3b37;
+  font-weight: 800;
+}
+
+.scope-table th:first-child {
+  text-align: left;
+}
+
+.scope-total-row th,
+.scope-total-row td {
+  background: #f8faf9;
+  font-weight: 800;
+}
+
 .test-table {
   width: 100%;
   border-collapse: collapse;
@@ -712,6 +813,14 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .import-scope-grid {
+    grid-template-columns: repeat(3, minmax(100px, 1fr));
+  }
+
+  .scope-summary {
+    grid-column: 1 / -1;
+  }
+
   .test-table {
     min-width: 720px;
   }
@@ -734,6 +843,7 @@ textarea:focus {
   .panel-heading,
   .refinement-heading,
   .revision-heading,
+  .import-scope-heading,
   .actions,
   .result-row {
     align-items: stretch;
@@ -747,8 +857,13 @@ textarea:focus {
   .step-row,
   .refinement-grid,
   .revision-grid,
+  .import-scope-grid,
   .test-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .scope-summary {
+    grid-column: auto;
   }
 
   .icon-button {
