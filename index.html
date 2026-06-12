@@ -74,7 +74,7 @@
           <div class="panel-heading">
             <div>
               <h3>Azure DevOps source</h3>
-              <p>First MVP screen with mock data until the API connector is added.</p>
+              <p>Import the story and source context used for AI test generation.</p>
             </div>
           </div>
 
@@ -89,27 +89,7 @@
             </label>
             <label>
               User Story ID
-              <input id="storyId" name="storyId" type="number" value="61029" min="1">
-            </label>
-            <label>
-              Test Plan ID
-              <input id="testPlanId" name="testPlanId" type="number" value="1001" min="1">
-            </label>
-            <label>
-              Web Suite ID
-              <input id="webSuiteId" name="webSuiteId" type="number" value="2001" min="1">
-            </label>
-            <label>
-              Android Suite ID
-              <input id="androidSuiteId" name="androidSuiteId" type="number" min="1">
-            </label>
-            <label>
-              iOS Suite ID
-              <input id="iosSuiteId" name="iosSuiteId" type="number" min="1">
-            </label>
-            <label>
-              API Suite ID
-              <input id="apiSuiteId" name="apiSuiteId" type="number" min="1">
+              <input id="storyId" name="storyId" type="number" value="67191" min="1">
             </label>
           </form>
 
@@ -156,45 +136,6 @@
             <button class="secondary-action" id="addTestButton" type="button">Add test case</button>
           </div>
 
-          <div class="insight-grid">
-            <div>
-              <h4>Assumptions</h4>
-              <ul id="assumptionsList"></ul>
-            </div>
-            <div>
-              <h4>Questions for BA</h4>
-              <ul id="questionsList"></ul>
-            </div>
-          </div>
-
-          <section class="refinement-panel">
-            <div class="refinement-heading">
-              <div>
-                <h4>AI refinement</h4>
-                <p>Use QA review notes to regenerate the full test set.</p>
-              </div>
-              <button class="primary-action" id="refineButton" type="button">Refine with AI</button>
-            </div>
-            <div class="refinement-grid">
-              <label>
-                Clarified business rules
-                <textarea id="clarifiedBusinessRules" rows="3" placeholder="Example: Threshold is 50,000 RON. ZIP Code is optional."></textarea>
-              </label>
-              <label>
-                Coverage gaps
-                <textarea id="coverageGaps" rows="3" placeholder="Example: Add boundary tests around threshold and timeout/rejection statuses."></textarea>
-              </label>
-              <label>
-                Tests to avoid or change
-                <textarea id="testsToAvoidOrChange" rows="3" placeholder="Example: Reduce duplicate Android/iOS tests. Do not generate API tests."></textarea>
-              </label>
-              <label>
-                Additional instruction
-                <textarea id="additionalRefinementInstruction" rows="3" placeholder="Example: Focus on regression risk around existing domestic payment flow."></textarea>
-              </label>
-            </div>
-          </section>
-
           <section class="revision-panel is-hidden" id="revisionPanel">
             <div class="revision-heading">
               <div>
@@ -218,6 +159,17 @@
               </div>
             </div>
           </section>
+
+          <div class="insight-grid">
+            <div>
+              <h4>Assumptions</h4>
+              <ul id="assumptionsList"></ul>
+            </div>
+            <div>
+              <h4>Questions for BA</h4>
+              <ul id="questionsList"></ul>
+            </div>
+          </div>
 
           <div class="test-table-wrap">
             <table class="test-table" aria-label="Generated test cases">
@@ -273,6 +225,34 @@
             </div>
           </div>
 
+          <section class="refinement-panel">
+            <div class="refinement-heading">
+              <div>
+                <h4>AI refinement</h4>
+                <p>Use QA review notes to regenerate the full test set.</p>
+              </div>
+              <button class="primary-action" id="refineButton" type="button">Refine with AI</button>
+            </div>
+            <div class="refinement-grid">
+              <label>
+                Clarified business rules
+                <textarea id="clarifiedBusinessRules" rows="3" placeholder="Example: Threshold is 50,000 RON. ZIP Code is optional."></textarea>
+              </label>
+              <label>
+                Coverage gaps
+                <textarea id="coverageGaps" rows="3" placeholder="Example: Add boundary tests around threshold and timeout/rejection statuses."></textarea>
+              </label>
+              <label>
+                Tests to avoid or change
+                <textarea id="testsToAvoidOrChange" rows="3" placeholder="Example: Reduce duplicate Android/iOS tests. Do not generate API tests."></textarea>
+              </label>
+              <label>
+                Additional instruction
+                <textarea id="additionalRefinementInstruction" rows="3" placeholder="Example: Focus on regression risk around existing domestic payment flow."></textarea>
+              </label>
+            </div>
+          </section>
+
           <section class="import-scope-panel">
             <div class="import-scope-heading">
               <div>
@@ -322,6 +302,37 @@
                   <tbody id="importScopeSummary"></tbody>
                 </table>
               </div>
+            </div>
+          </section>
+
+          <section class="azure-target-panel">
+            <div class="azure-target-heading">
+              <div>
+                <h4>Azure import target</h4>
+                <p>Define the Test Plan and platform suites before dry run or real import.</p>
+              </div>
+            </div>
+            <div class="azure-target-grid">
+              <label>
+                Test Plan ID
+                <input id="testPlanId" name="testPlanId" type="number" value="68397" min="1">
+              </label>
+              <label>
+                Web Suite ID
+                <input id="webSuiteId" name="webSuiteId" type="number" value="68524" min="1">
+              </label>
+              <label>
+                Android Suite ID
+                <input id="androidSuiteId" name="androidSuiteId" type="number" value="68523" min="1">
+              </label>
+              <label>
+                iOS Suite ID
+                <input id="iosSuiteId" name="iosSuiteId" type="number" value="68522" min="1">
+              </label>
+              <label>
+                API Suite ID
+                <input id="apiSuiteId" name="apiSuiteId" type="number" min="1">
+              </label>
             </div>
           </section>
 

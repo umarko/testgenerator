@@ -646,6 +646,35 @@ textarea:focus {
   font-weight: 800;
 }
 
+.azure-target-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.azure-target-heading {
+  margin-bottom: 10px;
+}
+
+.azure-target-heading h4,
+.azure-target-heading p {
+  margin: 0;
+}
+
+.azure-target-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.azure-target-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 10px;
+}
+
 .test-table {
   width: 100%;
   border-collapse: collapse;
@@ -771,6 +800,16 @@ textarea:focus {
   margin-bottom: 14px;
 }
 
+.result-summary.is-success {
+  border-color: #78b89b;
+  background: #effaf4;
+}
+
+.result-summary.is-warning {
+  border-color: #d8b25f;
+  background: #fff8e8;
+}
+
 .result-list {
   display: grid;
   gap: 10px;
@@ -817,6 +856,10 @@ textarea:focus {
     grid-template-columns: repeat(3, minmax(100px, 1fr));
   }
 
+  .azure-target-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
   .scope-summary {
     grid-column: 1 / -1;
   }
@@ -858,6 +901,7 @@ textarea:focus {
   .refinement-grid,
   .revision-grid,
   .import-scope-grid,
+  .azure-target-grid,
   .test-detail-grid {
     grid-template-columns: 1fr;
   }

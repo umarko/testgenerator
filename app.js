@@ -133,19 +133,10 @@ const importPlatformInputs = [
 ].map((id) => document.querySelector(`#${id}`));
 
 function readSource() {
-  const suiteIdsByPlatform = {
-    Web: document.querySelector("#webSuiteId").value.trim(),
-    Android: document.querySelector("#androidSuiteId").value.trim(),
-    iOS: document.querySelector("#iosSuiteId").value.trim(),
-    API: document.querySelector("#apiSuiteId").value.trim()
-  };
   return {
     organization: document.querySelector("#organization").value.trim(),
     project: document.querySelector("#project").value.trim(),
     storyId: document.querySelector("#storyId").value.trim(),
-    testPlanId: document.querySelector("#testPlanId").value.trim(),
-    testSuiteId: suiteIdsByPlatform.Web,
-    suiteIdsByPlatform,
     storyTitle: document.querySelector("#storyTitle").value.trim(),
     acceptanceCriteria: document.querySelector("#acceptanceCriteria").value.trim(),
     additionalContext: document.querySelector("#additionalContext").value.trim(),
@@ -162,6 +153,27 @@ function readSource() {
         return [key === "ios" ? "ios" : key, input.checked];
       })
     )
+  };
+}
+
+function readImportTarget() {
+  const suiteIdsByPlatform = {
+    Web: document.querySelector("#webSuiteId").value.trim(),
+    Android: document.querySelector("#androidSuiteId").value.trim(),
+    iOS: document.querySelector("#iosSuiteId").value.trim(),
+    API: document.querySelector("#apiSuiteId").value.trim()
+  };
+  return {
+    testPlanId: document.querySelector("#testPlanId").value.trim(),
+    testSuiteId: suiteIdsByPlatform.Web,
+    suiteIdsByPlatform
+  };
+}
+
+function applyImportTargetToSource() {
+  state.source = {
+    ...state.source,
+    ...readImportTarget()
   };
 }
 
@@ -566,9 +578,7 @@ async function requestBackendGeneration(source) {
       azure: {
         organization: source.organization,
         project: source.project,
-        storyId: source.storyId,
-        testPlanId: source.testPlanId,
-        testSuiteId: source.testSuiteId
+        storyId: source.storyId
       },
       story: {
         title: source.storyTitle,
@@ -665,9 +675,7 @@ async function requestBackendRefinement(source, refinementNotes) {
       azure: {
         organization: source.organization,
         project: source.project,
-        storyId: source.storyId,
-        testPlanId: source.testPlanId,
-        testSuiteId: source.testSuiteId
+        storyId: source.storyId
       },
       story: {
         title: source.storyTitle,
@@ -1265,6 +1273,7 @@ function validateBeforeImport() {
 
 async function mockImport() {
   state.source = { ...state.source, ...readSource() };
+  applyImportTargetToSource();
   state.importScope = readImportScope();
   const errors = validateBeforeImport();
   if (errors.length) {
@@ -1293,6 +1302,7 @@ async function mockImport() {
 
 async function realAzureImport() {
   state.source = { ...state.source, ...readSource() };
+  applyImportTargetToSource();
   state.importScope = readImportScope();
   const errors = validateBeforeImport();
   if (errors.length) {
@@ -1323,6 +1333,7 @@ async function realAzureImport() {
     const response = await requestBackendImport("/imports/azure");
     renderImportResult(response);
     setStep("import");
+    showRealImportCompletion(response);
   } catch (error) {
     alert(`Real Azure import failed. ${error.message}`);
   } finally {
@@ -1371,8 +1382,9 @@ function renderImportResult(response) {
   const isDryRun = Boolean(response.plannedTestCases);
   state.lastDryRunValid = isDryRun ? response.status === "valid" : state.lastDryRunValid;
   elements.realImportButton.disabled = !state.lastDryRunValid;
+  elements.resultSummary.className = `result-summary ${getImportResultClass(response.status, isDryRun)}`;
   elements.resultSummary.innerHTML = `
-    <strong>${isDryRun ? "Azure dry run completed" : `${created.length} test cases imported to Azure DevOps.`}</strong>
+    <strong>${getImportResultTitle(response, created.length, isDryRun)}</strong>
     <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
     ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}. ${escapeHtml(formatDryRunSuiteNames(response))}</p>` : ""}
   `;
@@ -1397,6 +1409,42 @@ function renderImportResult(response) {
     `;
     elements.resultList.appendChild(row);
   });
+}
+
+function getImportResultTitle(response, count, isDryRun) {
+  if (isDryRun) {
+    return "Azure dry run completed";
+  }
+  if (response.status === "imported") {
+    return `Import completed successfully. ${count} test cases imported to Azure DevOps.`;
+  }
+  if (response.status === "partially-imported") {
+    return `Import partially completed. ${count} test cases imported to Azure DevOps.`;
+  }
+  return "Azure import completed with issues.";
+}
+
+function getImportResultClass(status, isDryRun) {
+  if (isDryRun) {
+    return status === "valid" ? "is-success" : "is-warning";
+  }
+  if (status === "imported") {
+    return "is-success";
+  }
+  return "is-warning";
+}
+
+function showRealImportCompletion(response) {
+  const created = response.createdTestCases || [];
+  if (response.status === "imported") {
+    alert(`Azure import completed successfully. ${created.length} test cases were imported.`);
+    return;
+  }
+  if (response.status === "partially-imported") {
+    alert(`Azure import partially completed. ${created.length} test cases were imported. Check Import result details.`);
+    return;
+  }
+  alert("Azure import finished with issues. No test cases were imported. Check Import result details.");
 }
 
 function formatSuiteMapping(mapping) {
