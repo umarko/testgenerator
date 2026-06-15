@@ -61,7 +61,6 @@ const elements = {
   generateButton: document.querySelector("#generateButton"),
   generateTestsFromCoverageButton: document.querySelector("#generateTestsFromCoverageButton"),
   refineCoverageButton: document.querySelector("#refineCoverageButton"),
-  goToTestsButton: document.querySelector("#goToTestsButton"),
   resetButton: document.querySelector("#resetButton"),
   addTestButton: document.querySelector("#addTestButton"),
   refineButton: document.querySelector("#refineButton"),
@@ -69,7 +68,6 @@ const elements = {
   realImportButton: document.querySelector("#realImportButton"),
   saveDraftButton: document.querySelector("#saveDraftButton"),
   loadDraftButton: document.querySelector("#loadDraftButton"),
-  backToSourceButton: document.querySelector("#backToSourceButton"),
   backToSourceFromCoverageButton: document.querySelector("#backToSourceFromCoverageButton"),
   backToCoverageButton: document.querySelector("#backToCoverageButton"),
   backToReviewButton: document.querySelector("#backToReviewButton"),
@@ -99,6 +97,14 @@ const elements = {
   resultSummary: document.querySelector("#resultSummary"),
   resultList: document.querySelector("#resultList")
 };
+
+function assertRequiredElements() {
+  Object.entries(elements).forEach(([name, element]) => {
+    if (!element) {
+      throw new Error(`Missing required UI element: ${name}`);
+    }
+  });
+}
 
 const coverageInputs = [
   "includePositive",
@@ -675,6 +681,12 @@ function hasRefinementNotes(notes) {
   return Object.values(notes).some(Boolean);
 }
 
+function hasCoverageRefinementInput() {
+  const globalNotes = document.querySelector("#coverageMapNotes").value.trim();
+  const areaNotes = state.coverageMap?.functionalAreas?.some((area) => area.userNotes.trim()) || false;
+  return Boolean(globalNotes || areaNotes);
+}
+
 async function refineTests() {
   state.source = { ...state.source, ...readSource() };
   const refinementNotes = readRefinementNotes();
@@ -684,6 +696,9 @@ async function refineTests() {
   }
   if (!hasRefinementNotes(refinementNotes)) {
     alert("Add at least one refinement note before sending to AI.");
+    return;
+  }
+  if (!window.confirm("Send refinement notes to AI and replace the current test set with a revised version?")) {
     return;
   }
 
@@ -701,6 +716,7 @@ async function refineTests() {
     state.currentPage = 1;
     state.expandedTestIndex = null;
     renderReview();
+    alert("AI refinement completed. Review the revised test set.");
   } catch (error) {
     alert(`AI refinement failed. ${error.message}`);
   } finally {
@@ -714,6 +730,13 @@ async function refineCoverageMap() {
     alert("Generate a coverage map before refinement.");
     return;
   }
+  if (!hasCoverageRefinementInput()) {
+    alert("Add at least one coverage note or functional area note before refinement.");
+    return;
+  }
+  if (!window.confirm("Send coverage refinement notes to AI and replace the current coverage map with a revised version?")) {
+    return;
+  }
   state.source = { ...state.source, ...readSource() };
   elements.refineCoverageButton.disabled = true;
   elements.refineCoverageButton.textContent = "Refining...";
@@ -722,6 +745,7 @@ async function refineCoverageMap() {
     const response = await requestBackendCoverageRefinement(state.source);
     applyCoverageMapResponse(response);
     renderCoverageMap();
+    alert("Coverage map refinement completed. Review the revised coverage map.");
   } catch (error) {
     alert(`Coverage map refinement failed. ${error.message}`);
   } finally {
@@ -994,13 +1018,11 @@ function renderCoverageMap() {
   if (!coverageMap) {
     elements.coverageSummary.innerHTML = "<strong>No coverage map yet.</strong><p>Generate a coverage map from the Source step.</p>";
     elements.generateTestsFromCoverageButton.disabled = true;
-    elements.goToTestsButton.disabled = true;
     return;
   }
 
   const includedCount = coverageMap.functionalAreas.filter((area) => area.included).length;
   elements.generateTestsFromCoverageButton.disabled = includedCount === 0;
-  elements.goToTestsButton.disabled = state.testCases.length === 0;
   elements.coverageSummary.innerHTML = `
     <strong>${escapeHtml(coverageMap.summary || "Coverage map generated.")}</strong>
     <p>${includedCount} of ${coverageMap.functionalAreas.length} functional areas included for test generation.</p>
@@ -1094,6 +1116,8 @@ function renderEvidenceHtml(items) {
 }
 
 function renderReview() {
+  syncReviewFiltersFromControls();
+  state.importScope = readImportScope();
   renderList(elements.assumptionsList, state.assumptions);
   renderList(elements.questionsList, state.questions);
   renderRevisionHistory();
@@ -1141,6 +1165,14 @@ function getFilteredTestEntries() {
         (!state.reviewFilters.priority || testCase.priority === state.reviewFilters.priority)
       );
     });
+}
+
+function syncReviewFiltersFromControls() {
+  state.reviewFilters = {
+    platform: elements.platformFilter.value,
+    category: elements.categoryFilter.value,
+    priority: elements.priorityFilter.value
+  };
 }
 
 function readImportScope() {
@@ -1500,7 +1532,7 @@ function resetImportScope() {
 function handleImportScopeChange() {
   state.importScope = readImportScope();
   invalidateDryRun();
-  renderImportScopeSummary();
+  renderReview();
 }
 
 function clearGeneratedArtifacts(message) {
@@ -2059,15 +2091,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+assertRequiredElements();
+
 elements.importStoryButton.addEventListener("click", importStory);
 elements.generateButton.addEventListener("click", generateCoverageMap);
 elements.generateTestsFromCoverageButton.addEventListener("click", generateTestsFromCoverageMap);
 elements.refineCoverageButton.addEventListener("click", refineCoverageMap);
-elements.goToTestsButton.addEventListener("click", () => {
-  if (state.testCases.length) {
-    setStep("tests");
-  }
-});
 elements.resetButton.addEventListener("click", resetDraft);
 elements.saveDraftButton.addEventListener("click", saveLocalDraft);
 elements.loadDraftButton.addEventListener("click", loadLocalDraft);
@@ -2075,7 +2104,6 @@ elements.addTestButton.addEventListener("click", addEmptyTestCase);
 elements.refineButton.addEventListener("click", refineTests);
 elements.mockImportButton.addEventListener("click", mockImport);
 elements.realImportButton.addEventListener("click", realAzureImport);
-elements.backToSourceButton.addEventListener("click", () => setStep("coverage"));
 elements.backToSourceFromCoverageButton.addEventListener("click", () => setStep("source"));
 elements.backToCoverageButton.addEventListener("click", () => setStep("coverage"));
 elements.backToReviewButton.addEventListener("click", () => setStep("tests"));
@@ -2085,15 +2113,18 @@ elements.downloadJsonButton.addEventListener("click", downloadJson);
   [elements.categoryFilter, "category"],
   [elements.priorityFilter, "priority"]
 ].forEach(([select, key]) => {
-  select.addEventListener("change", () => {
-    state.reviewFilters[key] = select.value;
+  const handleFilterChange = () => {
+    syncReviewFiltersFromControls();
     state.currentPage = 1;
     state.expandedTestIndex = null;
     renderReview();
-  });
+  };
+  select.addEventListener("input", handleFilterChange);
+  select.addEventListener("change", handleFilterChange);
 });
 
 [...importCoverageInputs, ...importPriorityInputs, ...importPlatformInputs].forEach((input) => {
+  input.addEventListener("input", handleImportScopeChange);
   input.addEventListener("change", handleImportScopeChange);
 });
 
