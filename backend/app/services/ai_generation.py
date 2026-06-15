@@ -5,7 +5,15 @@ from textwrap import dedent
 from fastapi import HTTPException
 from openai import APIConnectionError, APIStatusError, OpenAI
 
-from app.models import GenerationRequest, GenerationResponse, RefinementRequest, TestCase
+from app.models import (
+    CoverageMapRefinementRequest,
+    CoverageMapResponse,
+    FunctionalArea,
+    GenerationRequest,
+    GenerationResponse,
+    RefinementRequest,
+    TestCase,
+)
 from app.settings import get_settings
 from app.services.generation_cache import load_cached_generation, save_cached_generation
 from app.services.test_generation import MAX_TESTS_PER_PLATFORM
@@ -155,6 +163,132 @@ def refine_ai_tests(request: RefinementRequest) -> GenerationResponse:
     )
 
 
+def generate_coverage_map(request: GenerationRequest) -> CoverageMapResponse:
+    allowed_categories = _allowed_categories(request)
+    allowed_priorities = _allowed_priorities(request)
+    allowed_platforms = _allowed_platforms(request)
+
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured in backend/.env.",
+        )
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    try:
+        response = client.responses.create(
+            model=settings.openai_model,
+            input=[
+                {"role": "system", "content": _coverage_system_prompt()},
+                {
+                    "role": "user",
+                    "content": _coverage_user_prompt(
+                        request,
+                        allowed_categories,
+                        allowed_priorities,
+                        allowed_platforms,
+                    ),
+                },
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "qa_coverage_map",
+                    "strict": True,
+                    "schema": _coverage_map_schema(),
+                }
+            },
+        )
+    except APIStatusError as exc:
+        detail = _openai_error_detail(exc)
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except APIConnectionError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="OpenAI API is not reachable. Check network access and proxy/firewall settings.",
+        ) from exc
+
+    payload = _parse_response_json(response)
+    functional_areas = [
+        FunctionalArea.model_validate(area)
+        for area in payload.get("functionalAreas", [])
+    ]
+
+    return CoverageMapResponse(
+        sourceWorkItemId=request.azure.story_id,
+        summary=payload.get("summary", f"Generated AI coverage map for: {request.story.title}"),
+        functionalAreas=functional_areas,
+        crossFunctionalRisks=payload.get("crossFunctionalRisks", []),
+        globalAssumptions=payload.get("globalAssumptions", []),
+        globalQuestionsForBA=payload.get("globalQuestionsForBA", []),
+        generationSource=f"openai-coverage:{settings.openai_model}",
+    )
+
+
+def refine_coverage_map(request: CoverageMapRefinementRequest) -> CoverageMapResponse:
+    allowed_categories = _allowed_categories(request)
+    allowed_priorities = _allowed_priorities(request)
+    allowed_platforms = _allowed_platforms(request)
+
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured in backend/.env.",
+        )
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    try:
+        response = client.responses.create(
+            model=settings.openai_model,
+            input=[
+                {"role": "system", "content": _coverage_system_prompt()},
+                {
+                    "role": "user",
+                    "content": _coverage_refinement_prompt(
+                        request,
+                        allowed_categories,
+                        allowed_priorities,
+                        allowed_platforms,
+                    ),
+                },
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "qa_coverage_map_refinement",
+                    "strict": True,
+                    "schema": _coverage_map_schema(),
+                }
+            },
+        )
+    except APIStatusError as exc:
+        detail = _openai_error_detail(exc)
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except APIConnectionError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="OpenAI API is not reachable. Check network access and proxy/firewall settings.",
+        ) from exc
+
+    payload = _parse_response_json(response)
+    functional_areas = [
+        FunctionalArea.model_validate(area)
+        for area in payload.get("functionalAreas", [])
+    ]
+
+    return CoverageMapResponse(
+        sourceWorkItemId=request.azure.story_id,
+        summary=payload.get("summary", f"Refined AI coverage map for: {request.story.title}"),
+        functionalAreas=functional_areas,
+        crossFunctionalRisks=payload.get("crossFunctionalRisks", []),
+        globalAssumptions=payload.get("globalAssumptions", []),
+        globalQuestionsForBA=payload.get("globalQuestionsForBA", []),
+        generationSource=f"openai-coverage-refine:{settings.openai_model}",
+    )
+
+
 def _system_prompt() -> str:
     return dedent(
         """
@@ -186,6 +320,7 @@ def _system_prompt() -> str:
         Boundary: Limits, ranges, precision, dates, lengths, thresholds, and edge values.
         Security: Authorization, access control, sensitive data exposure, duplicate submission, and abuse-resistant behavior.
         Audit: Audit trail, traceability, logs, evidence, compliance records, and operational support checks.
+        Regression: Existing behavior that may be impacted by this story.
         """
     ).strip()
 
@@ -234,6 +369,158 @@ def _user_prompt(
         - Put uncertain execution setup in assumptions, but put unclear business behavior in questionsForBA.
         - Each test case must have clear preconditions and at least one action/expected result step.
         - Prefer concise, reviewable manual tests suitable for import into Azure DevOps Test Plans.
+        """
+    ).strip()
+
+
+def _coverage_system_prompt() -> str:
+    return dedent(
+        """
+        You are a senior fintech QA analyst performing test coverage analysis.
+
+        Your task is NOT to create test cases.
+        Your task is NOT to create detailed test scenarios.
+
+        Analyze the provided user story, acceptance criteria, business rules, additional user context, and attached documentation.
+        Divide the feature into logical functional areas that require testing.
+        A functional area should represent a group of related business rules, validations, user interactions, processing logic, integrations, workflows, or impacted existing behavior.
+        Your goal is to create a coverage map that helps QA understand whether the complete feature is covered before creating detailed test cases.
+
+        Rules:
+        - Do not create test cases.
+        - Do not create detailed test scenarios.
+        - Do not split the feature into very small UI elements.
+        - Do not create separate areas for fields that belong to the same business functionality.
+        - Group related validations and behaviors together.
+        - Include both new functionality and impacted existing functionality.
+        - Include regression areas when the story or documentation states or strongly implies that existing flows may be impacted.
+        - Include integration areas when the feature affects external systems, APIs, payment rails, back-office processing, status handling, reporting, audit, or downstream systems.
+        - Do not invent functionality that is not supported by the provided documentation.
+        - If a business rule, value, status, threshold, permission, role, fee, cut-off time, or error behavior is unclear, do not guess. Put it in questionsForBA.
+        - Use assumptions only for execution/test setup context, not for missing business rules.
+
+        Risk guidance:
+        - High: money movement, payment processing, transaction status, business routing, authorization/security, data integrity, audit/compliance, or functionality with high customer/business impact.
+        - Medium: validations, UI behavior, configuration-based logic, integration details, operational processing, error handling, or regression-sensitive behavior.
+        - Low: cosmetic, informational, wording-only, or low-risk display changes.
+
+        Coverage category guidance:
+        - Positive: successful expected behavior and happy paths.
+        - Negative: invalid input, rejected actions, blocked flows, error handling.
+        - Boundary: limits, thresholds, precision, dates, lengths, ranges, cut-off values.
+        - Security: authorization, access control, sensitive data exposure, fraud/abuse-resistant behavior.
+        - Audit: audit trail, traceability, compliance evidence, logs, operational support.
+        - Regression: existing behavior that may be impacted by this story.
+
+        Priority guidance:
+        - P1: critical business flow, money movement, irreversible actions, blocking validations, security-critical access, or production-stopping defects.
+        - P2: important alternative paths, common negative scenarios, major validations, high-value regression risk.
+        - P3: boundary values, less common validations, secondary workflow details.
+        - P4: UI clarity, helper text, persistence of low-risk states.
+        - P5: rare edge cases, cosmetic behavior, supporting evidence, nice-to-have checks.
+        """
+    ).strip()
+
+
+def _coverage_user_prompt(
+    request: GenerationRequest,
+    allowed_categories: set[str],
+    allowed_priorities: set[str],
+    allowed_platforms: set[str],
+) -> str:
+    return dedent(
+        f"""
+        Create a coverage map for this fintech user story.
+
+        Azure work item ID:
+        {request.azure.story_id}
+
+        Story title:
+        {request.story.title}
+
+        Acceptance criteria / description:
+        {request.story.acceptance_criteria or "Not provided."}
+
+        Additional user-provided context:
+        {request.story.additional_context or "Not provided."}
+
+        Included attachment documentation:
+        {_attachment_context(request)}
+
+        Selected categories:
+        {", ".join(sorted(allowed_categories))}
+
+        Selected priorities:
+        {", ".join(sorted(allowed_priorities))}
+
+        Selected platforms:
+        {", ".join(sorted(allowed_platforms))}
+
+        Coverage map constraints:
+        - Return only functional areas that are directly supported by the provided story, context, or attachment documentation.
+        - For each area, recommend only selected categories, selected priorities, and selected platforms.
+        - Include sourceEvidence for every functional area.
+        - Use suggestedTestFocus only for high-level focus; do not write test cases or detailed steps.
+        - Set included to true for every initially recommended area.
+        - Keep userNotes empty.
+        """
+    ).strip()
+
+
+def _coverage_refinement_prompt(
+    request: CoverageMapRefinementRequest,
+    allowed_categories: set[str],
+    allowed_priorities: set[str],
+    allowed_platforms: set[str],
+) -> str:
+    return dedent(
+        f"""
+        Refine the existing coverage map for this fintech user story.
+
+        Return the full revised coverage map, not only added or changed areas.
+        Preserve useful existing functional areas when they still match the clarified context.
+        Respect user notes on each functional area and the global coverage refinement notes.
+        If the user excluded an area, keep it excluded unless the documentation clearly shows it is critical and must be reconsidered.
+        Add new functional areas when user notes or documentation show missing coverage.
+
+        Azure work item ID:
+        {request.azure.story_id}
+
+        Story title:
+        {request.story.title}
+
+        Acceptance criteria / description:
+        {request.story.acceptance_criteria or "Not provided."}
+
+        Additional user-provided context:
+        {request.story.additional_context or "Not provided."}
+
+        Included attachment documentation:
+        {_attachment_context(request)}
+
+        Current coverage map:
+        {_coverage_map_context(request.current_coverage_map)}
+
+        Global coverage refinement notes:
+        {request.coverage_map_notes or "Not provided."}
+
+        Selected categories:
+        {", ".join(sorted(allowed_categories))}
+
+        Selected priorities:
+        {", ".join(sorted(allowed_priorities))}
+
+        Selected platforms:
+        {", ".join(sorted(allowed_platforms))}
+
+        Coverage refinement constraints:
+        - Do not create test cases.
+        - Return the complete revised coverage map.
+        - Recommend only selected categories, selected priorities, and selected platforms.
+        - Treat user notes as authoritative QA feedback unless they conflict with the provided documentation.
+        - Do not invent missing business values. Add BA questions instead.
+        - Keep sourceEvidence for every functional area.
+        - Keep or update included according to user feedback.
         """
     ).strip()
 
@@ -353,6 +640,39 @@ def _test_cases_context(test_cases: list[TestCase]) -> str:
     return "\n\n".join(chunks)
 
 
+def _coverage_map_context(coverage_map: CoverageMapResponse) -> str:
+    if not coverage_map.functional_areas:
+        return "No current coverage areas were provided."
+
+    chunks = [
+        f"Summary: {coverage_map.summary}",
+        "Functional areas:",
+    ]
+    for area in coverage_map.functional_areas:
+        chunks.append(
+            "\n".join(
+                [
+                    f"- {area.area_id} | included={area.included} | risk={area.risk_level}",
+                    f"  Name: {area.area_name}",
+                    f"  Description: {area.description}",
+                    f"  Main functionality: {'; '.join(area.main_functionality)}",
+                    f"  Platforms: {', '.join(area.platforms)}",
+                    f"  Categories: {', '.join(area.recommended_categories)}",
+                    f"  Priorities: {', '.join(area.recommended_priorities)}",
+                    f"  Suggested focus: {'; '.join(area.suggested_test_focus)}",
+                    f"  Questions for BA: {'; '.join(area.questions_for_ba) or 'None'}",
+                    f"  User notes: {area.user_notes or 'None'}",
+                ]
+            )
+        )
+
+    if coverage_map.cross_functional_risks:
+        chunks.append("Cross-functional risks:\n" + "\n".join(f"- {risk}" for risk in coverage_map.cross_functional_risks))
+    if coverage_map.global_questions_for_ba:
+        chunks.append("Global questions for BA:\n" + "\n".join(f"- {question}" for question in coverage_map.global_questions_for_ba))
+    return "\n\n".join(chunks)
+
+
 def _allowed_categories(request: GenerationRequest) -> set[str]:
     coverage = request.generation_policy.coverage
     allowed = set()
@@ -366,6 +686,8 @@ def _allowed_categories(request: GenerationRequest) -> set[str]:
         allowed.add("Security")
     if coverage.audit:
         allowed.add("Audit")
+    if coverage.regression:
+        allowed.add("Regression")
     return allowed
 
 
@@ -499,7 +821,7 @@ def _generation_schema() -> dict:
                         "priority": {"type": "string", "enum": ["P1", "P2", "P3", "P4", "P5"]},
                         "category": {
                             "type": "string",
-                            "enum": ["Positive", "Negative", "Boundary", "Security", "Audit"],
+                            "enum": ["Positive", "Negative", "Boundary", "Security", "Audit", "Regression"],
                         },
                         "preconditions": {"type": "array", "items": {"type": "string"}},
                         "steps": {
@@ -519,5 +841,90 @@ def _generation_schema() -> dict:
                     },
                 },
             },
+        },
+    }
+
+
+def _coverage_map_schema() -> dict:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "summary",
+            "functionalAreas",
+            "crossFunctionalRisks",
+            "globalAssumptions",
+            "globalQuestionsForBA",
+        ],
+        "properties": {
+            "summary": {"type": "string"},
+            "functionalAreas": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "areaId",
+                        "areaName",
+                        "description",
+                        "mainFunctionality",
+                        "qaImportance",
+                        "riskLevel",
+                        "sourceEvidence",
+                        "platforms",
+                        "recommendedCategories",
+                        "recommendedPriorities",
+                        "suggestedTestFocus",
+                        "assumptions",
+                        "questionsForBA",
+                        "included",
+                        "userNotes",
+                    ],
+                    "properties": {
+                        "areaId": {"type": "string"},
+                        "areaName": {"type": "string"},
+                        "description": {"type": "string"},
+                        "mainFunctionality": {"type": "array", "items": {"type": "string"}},
+                        "qaImportance": {"type": "string"},
+                        "riskLevel": {"type": "string", "enum": ["High", "Medium", "Low"]},
+                        "sourceEvidence": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["sourceType", "sourceName", "evidence"],
+                                "properties": {
+                                    "sourceType": {"type": "string"},
+                                    "sourceName": {"type": "string"},
+                                    "evidence": {"type": "string"},
+                                },
+                            },
+                        },
+                        "platforms": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["Web", "Android", "iOS", "API"]},
+                        },
+                        "recommendedCategories": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["Positive", "Negative", "Boundary", "Security", "Audit", "Regression"],
+                            },
+                        },
+                        "recommendedPriorities": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["P1", "P2", "P3", "P4", "P5"]},
+                        },
+                        "suggestedTestFocus": {"type": "array", "items": {"type": "string"}},
+                        "assumptions": {"type": "array", "items": {"type": "string"}},
+                        "questionsForBA": {"type": "array", "items": {"type": "string"}},
+                        "included": {"type": "boolean"},
+                        "userNotes": {"type": "string"},
+                    },
+                },
+            },
+            "crossFunctionalRisks": {"type": "array", "items": {"type": "string"}},
+            "globalAssumptions": {"type": "array", "items": {"type": "string"}},
+            "globalQuestionsForBA": {"type": "array", "items": {"type": "string"}},
         },
     }

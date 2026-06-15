@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import (
+    CoverageMapRefinementRequest,
+    CoverageMapResponse,
     GenerationRequest,
     GenerationResponse,
     ImportDryRunResponse,
@@ -11,7 +13,7 @@ from app.models import (
     WorkItemResponse,
 )
 from app.services.azure_devops import get_azure_devops_connector
-from app.services.ai_generation import generate_ai_tests, refine_ai_tests
+from app.services.ai_generation import generate_ai_tests, generate_coverage_map, refine_ai_tests, refine_coverage_map
 from app.services.azure_test_plans import dry_run_test_plan_import, import_test_cases_to_azure
 from app.services.importer import mock_import
 from app.services.test_generation import generate_mock_tests
@@ -59,6 +61,16 @@ def create_ai_generation(request: GenerationRequest) -> GenerationResponse:
 @app.post("/api/generations/refine", response_model=GenerationResponse)
 def refine_generation(request: RefinementRequest) -> GenerationResponse:
     return refine_ai_tests(request)
+
+
+@app.post("/api/coverage-map/ai", response_model=CoverageMapResponse)
+def create_coverage_map(request: GenerationRequest) -> CoverageMapResponse:
+    return generate_coverage_map(request)
+
+
+@app.post("/api/coverage-map/refine", response_model=CoverageMapResponse)
+def refine_coverage_map_generation(request: CoverageMapRefinementRequest) -> CoverageMapResponse:
+    return refine_coverage_map(request)
 
 
 @app.post("/api/imports/mock", response_model=ImportResponse)

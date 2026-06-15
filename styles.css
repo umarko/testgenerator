@@ -179,6 +179,14 @@ button {
   font-size: 24px;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .status-pill {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -523,6 +531,96 @@ textarea:focus {
   padding-left: 17px;
 }
 
+.coverage-summary,
+.coverage-refinement-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.coverage-map-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.coverage-area-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.coverage-area-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+.coverage-area-header h4,
+.coverage-area-header p,
+.coverage-area-grid h5,
+.coverage-area-grid p {
+  margin: 0;
+}
+
+.coverage-include {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.risk-pill {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.risk-high {
+  background: var(--danger);
+}
+
+.risk-medium {
+  background: var(--warning);
+}
+
+.risk-low {
+  background: var(--accent);
+}
+
+.coverage-area-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  font-size: 12px;
+}
+
+.coverage-area-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf9;
+  padding: 8px;
+}
+
+.coverage-area-grid ul {
+  margin: 6px 0 0;
+  padding-left: 17px;
+}
+
+.coverage-notes {
+  display: block;
+  margin-top: 10px;
+}
+
 .test-table-wrap {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -852,6 +950,10 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .coverage-area-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .import-scope-grid {
     grid-template-columns: repeat(3, minmax(100px, 1fr));
   }
@@ -900,6 +1002,8 @@ textarea:focus {
   .step-row,
   .refinement-grid,
   .revision-grid,
+  .coverage-area-header,
+  .coverage-area-grid,
   .import-scope-grid,
   .azure-target-grid,
   .test-detail-grid {

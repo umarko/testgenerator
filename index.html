@@ -22,12 +22,16 @@
             <span>1</span>
             Source
           </button>
-          <button class="step" type="button" data-step="review">
+          <button class="step" type="button" data-step="coverage">
             <span>2</span>
+            Coverage
+          </button>
+          <button class="step" type="button" data-step="tests">
+            <span>3</span>
             Review
           </button>
           <button class="step" type="button" data-step="import">
-            <span>3</span>
+            <span>4</span>
             Import
           </button>
         </nav>
@@ -40,6 +44,7 @@
             <label>Boundary <input type="checkbox" id="includeBoundary" checked></label>
             <label>Security <input type="checkbox" id="includeSecurity" checked></label>
             <label>Audit <input type="checkbox" id="includeAudit" checked></label>
+            <label>Regression <input type="checkbox" id="includeRegression" checked></label>
           </section>
 
           <section class="sidebar-panel">
@@ -67,7 +72,11 @@
             <p class="eyebrow">Manual QA copilot</p>
             <h2>Generate test cases from a user story</h2>
           </div>
-          <div class="status-pill" id="appStatus">Draft</div>
+          <div class="topbar-actions">
+            <button class="secondary-action" id="saveDraftButton" type="button">Save draft</button>
+            <button class="secondary-action" id="loadDraftButton" type="button">Load draft</button>
+            <div class="status-pill" id="appStatus">Draft</div>
+          </div>
         </header>
 
         <section class="panel source-panel" id="sourcePanel">
@@ -122,8 +131,41 @@
 
           <div class="actions">
             <button class="secondary-action" id="importStoryButton" type="button">Import story</button>
-            <button class="primary-action" id="generateButton" type="button" disabled>Generate tests</button>
+            <button class="primary-action" id="generateButton" type="button" disabled>Generate coverage map</button>
             <button class="secondary-action" id="resetButton" type="button">Reset draft</button>
+          </div>
+        </section>
+
+        <section class="panel coverage-panel is-hidden" id="coveragePanel">
+          <div class="panel-heading">
+            <div>
+              <h3>Coverage map</h3>
+              <p>Review functional areas before generating detailed test cases.</p>
+            </div>
+            <button class="primary-action" id="generateTestsFromCoverageButton" type="button">Generate tests from coverage map</button>
+          </div>
+
+          <div class="coverage-summary" id="coverageSummary"></div>
+
+          <div class="coverage-map-list" id="coverageMapList"></div>
+
+          <section class="coverage-refinement-panel">
+            <div class="refinement-heading">
+              <div>
+                <h4>Coverage refinement</h4>
+                <p>Add QA notes and refine the coverage map before creating test cases.</p>
+              </div>
+              <button class="primary-action" id="refineCoverageButton" type="button">Refine coverage map</button>
+            </div>
+            <label>
+              Global coverage refinement notes
+              <textarea id="coverageMapNotes" rows="3" placeholder="Example: Add regression coverage for existing RON transfer flows and clarify processing statuses."></textarea>
+            </label>
+          </section>
+
+          <div class="actions">
+            <button class="secondary-action" id="backToSourceFromCoverageButton" type="button">Back</button>
+            <button class="primary-action" id="goToTestsButton" type="button">Review generated tests</button>
           </div>
         </section>
 
@@ -270,6 +312,7 @@
                 <label>Boundary <input type="checkbox" id="importBoundary" checked></label>
                 <label>Security <input type="checkbox" id="importSecurity" checked></label>
                 <label>Audit <input type="checkbox" id="importAudit" checked></label>
+                <label>Regression <input type="checkbox" id="importRegression" checked></label>
               </div>
               <div class="scope-group">
                 <h5>Priority</h5>
@@ -337,7 +380,7 @@
           </section>
 
           <div class="actions">
-            <button class="secondary-action" id="backToSourceButton" type="button">Back</button>
+            <button class="secondary-action" id="backToCoverageButton" type="button">Back</button>
             <button class="primary-action" id="mockImportButton" type="button">Dry run Azure import</button>
             <button class="danger-action" id="realImportButton" type="button" disabled>Real Azure import</button>
           </div>

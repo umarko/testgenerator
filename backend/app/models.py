@@ -7,6 +7,7 @@ class CoverageOptions(BaseModel):
     boundary: bool = True
     security: bool = True
     audit: bool = True
+    regression: bool = True
 
 
 class PriorityOptions(BaseModel):
@@ -59,6 +60,45 @@ class GenerationRequest(BaseModel):
     story: StoryContext
     figma: FigmaContext = Field(default_factory=FigmaContext)
     generation_policy: GenerationPolicy = Field(default_factory=GenerationPolicy, alias="generationPolicy")
+
+
+class SourceEvidence(BaseModel):
+    source_type: str = Field(alias="sourceType")
+    source_name: str = Field(default="", alias="sourceName")
+    evidence: str
+
+
+class FunctionalArea(BaseModel):
+    area_id: str = Field(alias="areaId")
+    area_name: str = Field(alias="areaName")
+    description: str
+    main_functionality: list[str] = Field(alias="mainFunctionality")
+    qa_importance: str = Field(alias="qaImportance")
+    risk_level: str = Field(alias="riskLevel")
+    source_evidence: list[SourceEvidence] = Field(default_factory=list, alias="sourceEvidence")
+    platforms: list[str] = Field(default_factory=list)
+    recommended_categories: list[str] = Field(default_factory=list, alias="recommendedCategories")
+    recommended_priorities: list[str] = Field(default_factory=list, alias="recommendedPriorities")
+    suggested_test_focus: list[str] = Field(default_factory=list, alias="suggestedTestFocus")
+    assumptions: list[str] = Field(default_factory=list)
+    questions_for_ba: list[str] = Field(default_factory=list, alias="questionsForBA")
+    included: bool = True
+    user_notes: str = Field(default="", alias="userNotes")
+
+
+class CoverageMapResponse(BaseModel):
+    source_work_item_id: str = Field(alias="sourceWorkItemId")
+    summary: str
+    functional_areas: list[FunctionalArea] = Field(alias="functionalAreas")
+    cross_functional_risks: list[str] = Field(default_factory=list, alias="crossFunctionalRisks")
+    global_assumptions: list[str] = Field(default_factory=list, alias="globalAssumptions")
+    global_questions_for_ba: list[str] = Field(default_factory=list, alias="globalQuestionsForBA")
+    generation_source: str = Field(default="backend", alias="generationSource")
+
+
+class CoverageMapRefinementRequest(GenerationRequest):
+    current_coverage_map: CoverageMapResponse = Field(alias="currentCoverageMap")
+    coverage_map_notes: str = Field(default="", alias="coverageMapNotes")
 
 
 class WorkItemRelation(BaseModel):
