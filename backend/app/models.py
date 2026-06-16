@@ -55,13 +55,6 @@ class GenerationPolicy(BaseModel):
     platforms: PlatformOptions = Field(default_factory=PlatformOptions)
 
 
-class GenerationRequest(BaseModel):
-    azure: AzureSource
-    story: StoryContext
-    figma: FigmaContext = Field(default_factory=FigmaContext)
-    generation_policy: GenerationPolicy = Field(default_factory=GenerationPolicy, alias="generationPolicy")
-
-
 class SourceEvidence(BaseModel):
     source_type: str = Field(alias="sourceType")
     source_name: str = Field(default="", alias="sourceName")
@@ -94,6 +87,22 @@ class CoverageMapResponse(BaseModel):
     global_assumptions: list[str] = Field(default_factory=list, alias="globalAssumptions")
     global_questions_for_ba: list[str] = Field(default_factory=list, alias="globalQuestionsForBA")
     generation_source: str = Field(default="backend", alias="generationSource")
+
+
+class ApprovedCoverageMap(BaseModel):
+    summary: str = ""
+    functional_areas: list[FunctionalArea] = Field(default_factory=list, alias="functionalAreas")
+    cross_functional_risks: list[str] = Field(default_factory=list, alias="crossFunctionalRisks")
+    global_assumptions: list[str] = Field(default_factory=list, alias="globalAssumptions")
+    global_questions_for_ba: list[str] = Field(default_factory=list, alias="globalQuestionsForBA")
+
+
+class GenerationRequest(BaseModel):
+    azure: AzureSource
+    story: StoryContext
+    figma: FigmaContext = Field(default_factory=FigmaContext)
+    generation_policy: GenerationPolicy = Field(default_factory=GenerationPolicy, alias="generationPolicy")
+    approved_coverage_map: ApprovedCoverageMap | None = Field(default=None, alias="approvedCoverageMap")
 
 
 class CoverageMapRefinementRequest(GenerationRequest):

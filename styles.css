@@ -553,16 +553,15 @@ textarea:focus {
   padding: 12px;
 }
 
-.coverage-area-header {
+.coverage-area-summary {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: start;
-  margin-bottom: 10px;
 }
 
-.coverage-area-header h4,
-.coverage-area-header p,
+.coverage-area-summary h4,
+.coverage-area-summary p,
 .coverage-area-grid h5,
 .coverage-area-grid p {
   margin: 0;
@@ -575,6 +574,23 @@ textarea:focus {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.coverage-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.coverage-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8faf9;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 7px;
 }
 
 .risk-pill {
@@ -602,6 +618,7 @@ textarea:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   font-size: 12px;
+  margin-top: 10px;
 }
 
 .coverage-area-grid > div {
@@ -1002,7 +1019,7 @@ textarea:focus {
   .step-row,
   .refinement-grid,
   .revision-grid,
-  .coverage-area-header,
+  .coverage-area-summary,
   .coverage-area-grid,
   .import-scope-grid,
   .azure-target-grid,

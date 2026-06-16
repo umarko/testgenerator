@@ -301,6 +301,8 @@ def _system_prompt() -> str:
         Use assumptions only for execution context that is reasonable but not business-defining, such as "the user is authenticated", "test data exists", or "the feature flag is enabled".
         Use questionsForBA for missing business rules, unclear expected behavior, missing values, unresolved wording, or anything that could change the expected result.
         Respect the selected Category/Coverage and Priority filters strictly.
+        When an approved coverage map is provided, generate test cases only from included approved coverage map areas.
+        Do not create test cases for excluded coverage map areas.
         The maximum number of test cases is a cap, not a target. Generate only the number of tests that are genuinely useful.
         Each test case must target exactly one platform: Web, Android, iOS, or API.
         Each test case title must start with its platform prefix in this exact format: "WEB - ...", "Android - ...", "iOS - ...", or "API - ...".
@@ -350,6 +352,9 @@ def _user_prompt(
         Included attachment documentation:
         {_attachment_context(request)}
 
+        Approved coverage map:
+        {_approved_coverage_map_context(request)}
+
         Selected categories:
         {", ".join(sorted(allowed_categories))}
 
@@ -362,6 +367,9 @@ def _user_prompt(
         Generation constraints:
         - Return at most {MAX_TESTS_PER_PLATFORM} test cases per selected platform.
         - Return only selected categories, selected priorities, and selected platforms.
+        - If an approved coverage map is provided, generate tests only for included coverage map areas.
+        - Use the coverage map area name, suggested focus, QA notes, recommended categories, recommended priorities, and source evidence to decide what tests are needed.
+        - Do not generate tests for coverage map areas where included is false.
         - Prefix every title with the matching platform, for example "WEB - Verify transfer setup" or "iOS - Verify transfer setup".
         - Use priorities according to the supplied QA priority definitions.
         - Do not create the maximum number by default. Use the amount justified by the story and documentation.
@@ -668,6 +676,52 @@ def _coverage_map_context(coverage_map: CoverageMapResponse) -> str:
 
     if coverage_map.cross_functional_risks:
         chunks.append("Cross-functional risks:\n" + "\n".join(f"- {risk}" for risk in coverage_map.cross_functional_risks))
+    if coverage_map.global_questions_for_ba:
+        chunks.append("Global questions for BA:\n" + "\n".join(f"- {question}" for question in coverage_map.global_questions_for_ba))
+    return "\n\n".join(chunks)
+
+
+def _approved_coverage_map_context(request: GenerationRequest) -> str:
+    coverage_map = request.approved_coverage_map
+    if not coverage_map:
+        return "No approved coverage map was provided."
+
+    included_areas = [area for area in coverage_map.functional_areas if area.included]
+    if not included_areas:
+        return "An approved coverage map was provided, but no functional areas are included."
+
+    chunks = [
+        f"Summary: {coverage_map.summary}",
+        "Generate tests only for these included functional areas:",
+    ]
+    for area in included_areas:
+        evidence = "; ".join(
+            f"{item.source_type}{f' - {item.source_name}' if item.source_name else ''}: {item.evidence}"
+            for item in area.source_evidence
+        ) or "None"
+        chunks.append(
+            "\n".join(
+                [
+                    f"- {area.area_id} | {area.area_name} | risk={area.risk_level}",
+                    f"  Description: {area.description}",
+                    f"  Main functionality: {'; '.join(area.main_functionality)}",
+                    f"  QA importance: {area.qa_importance}",
+                    f"  Platforms: {', '.join(area.platforms)}",
+                    f"  Recommended categories: {', '.join(area.recommended_categories)}",
+                    f"  Recommended priorities: {', '.join(area.recommended_priorities)}",
+                    f"  Suggested focus: {'; '.join(area.suggested_test_focus)}",
+                    f"  Source evidence: {evidence}",
+                    f"  Area assumptions: {'; '.join(area.assumptions) or 'None'}",
+                    f"  Area questions for BA: {'; '.join(area.questions_for_ba) or 'None'}",
+                    f"  QA user notes: {area.user_notes or 'None'}",
+                ]
+            )
+        )
+
+    if coverage_map.cross_functional_risks:
+        chunks.append("Cross-functional risks:\n" + "\n".join(f"- {risk}" for risk in coverage_map.cross_functional_risks))
+    if coverage_map.global_assumptions:
+        chunks.append("Global assumptions:\n" + "\n".join(f"- {assumption}" for assumption in coverage_map.global_assumptions))
     if coverage_map.global_questions_for_ba:
         chunks.append("Global questions for BA:\n" + "\n".join(f"- {question}" for question in coverage_map.global_questions_for_ba))
     return "\n\n".join(chunks)

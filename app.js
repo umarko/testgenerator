@@ -589,13 +589,13 @@ async function requestBackendStory(storyId) {
   return response.json();
 }
 
-async function requestBackendGeneration(source) {
+async function requestBackendGeneration(source, options = {}) {
   const response = await fetch(`${API_BASE_URL}/generations/ai`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(buildGenerationPayload(source))
+    body: JSON.stringify(buildGenerationPayload(source, options))
   });
 
   if (!response.ok) {
@@ -639,8 +639,8 @@ async function requestBackendCoverageMap(source) {
   return response.json();
 }
 
-function buildGenerationPayload(source) {
-  return {
+function buildGenerationPayload(source, options = {}) {
+  const payload = {
     azure: {
       organization: source.organization,
       project: source.project,
@@ -666,6 +666,10 @@ function buildGenerationPayload(source) {
       maxTestCasesPerPlatform: MAX_TESTS_PER_PLATFORM
     }
   };
+  if (options.approvedCoverageMap) {
+    payload.approvedCoverageMap = options.approvedCoverageMap;
+  }
+  return payload;
 }
 
 function readRefinementNotes() {
@@ -769,10 +773,7 @@ async function generateTestsFromCoverageMap() {
     ...state.source,
     ...readSource()
   };
-  const sourceWithCoverageMap = {
-    ...state.source,
-    additionalContext: appendCoverageMapContext(state.source.additionalContext, state.coverageMap)
-  };
+  const approvedCoverageMap = buildApprovedCoverageMap(state.coverageMap);
 
   state.pageSize = PAGE_SIZE;
   state.currentPage = 1;
@@ -782,7 +783,7 @@ async function generateTestsFromCoverageMap() {
   elements.generateTestsFromCoverageButton.textContent = "Generating...";
 
   try {
-    const response = await requestBackendGeneration(sourceWithCoverageMap);
+    const response = await requestBackendGeneration(state.source, { approvedCoverageMap });
     applyGenerationResponse(response);
   } catch (error) {
     console.error("AI generation failed.", error);
@@ -881,25 +882,14 @@ async function requestBackendCoverageRefinement(source) {
   return response.json();
 }
 
-function appendCoverageMapContext(additionalContext, coverageMap) {
-  const includedAreas = coverageMap.functionalAreas.filter((area) => area.included);
-  const lines = includedAreas.map((area) => (
-    [
-      `${area.areaId} ${area.areaName}`,
-      `Risk: ${area.riskLevel}`,
-      `Platforms: ${area.platforms.join(", ")}`,
-      `Categories: ${area.recommendedCategories.join(", ")}`,
-      `Priorities: ${area.recommendedPriorities.join(", ")}`,
-      `Main functionality: ${area.mainFunctionality.join("; ")}`,
-      `Suggested focus: ${area.suggestedTestFocus.join("; ")}`,
-      area.userNotes ? `QA notes: ${area.userNotes}` : ""
-    ].filter(Boolean).join("\n")
-  ));
-  return [
-    additionalContext || "",
-    "Approved coverage map for test generation:",
-    lines.join("\n\n")
-  ].filter(Boolean).join("\n\n");
+function buildApprovedCoverageMap(coverageMap) {
+  return {
+    summary: coverageMap.summary || "",
+    functionalAreas: coverageMap.functionalAreas.filter((area) => area.included),
+    crossFunctionalRisks: coverageMap.crossFunctionalRisks || [],
+    globalAssumptions: coverageMap.globalAssumptions || [],
+    globalQuestionsForBA: coverageMap.globalQuestionsForBA || []
+  };
 }
 
 function applyGenerationResponse(response, options = {}) {
@@ -1039,49 +1029,55 @@ function renderCoverageArea(area, index) {
   const article = document.createElement("article");
   article.className = "coverage-area-card";
   article.innerHTML = `
-    <div class="coverage-area-header">
+    <div class="coverage-area-summary">
       <label class="coverage-include">
         <input type="checkbox" ${area.included ? "checked" : ""}>
-        Included
+        Include
       </label>
       <div>
         <h4>${escapeHtml(area.areaId)} ${escapeHtml(area.areaName)}</h4>
         <p>${escapeHtml(area.description)}</p>
+        <div class="coverage-chip-row">
+          ${renderChips(area.platforms)}
+          ${renderChips(area.recommendedCategories)}
+          ${renderChips(area.recommendedPriorities)}
+        </div>
       </div>
       <span class="risk-pill risk-${escapeHtml(area.riskLevel.toLowerCase())}">${escapeHtml(area.riskLevel)}</span>
+      <button class="compact-action coverage-toggle" type="button">Details</button>
     </div>
-    <div class="coverage-area-grid">
-      <div>
-        <h5>Main functionality</h5>
-        ${renderListHtml(area.mainFunctionality)}
+    <div class="coverage-area-details is-hidden">
+      <div class="coverage-area-grid">
+        <div>
+          <h5>Main functionality</h5>
+          ${renderListHtml(area.mainFunctionality)}
+        </div>
+        <div>
+          <h5>QA importance</h5>
+          <p>${escapeHtml(area.qaImportance)}</p>
+        </div>
+        <div>
+          <h5>Suggested focus</h5>
+          ${renderListHtml(area.suggestedTestFocus)}
+        </div>
+        <div>
+          <h5>Source evidence</h5>
+          ${renderEvidenceHtml(area.sourceEvidence)}
+        </div>
+        <div>
+          <h5>Assumptions</h5>
+          ${renderListHtml(area.assumptions)}
+        </div>
+        <div>
+          <h5>Questions for BA</h5>
+          ${renderListHtml(area.questionsForBA)}
+        </div>
       </div>
-      <div>
-        <h5>QA importance</h5>
-        <p>${escapeHtml(area.qaImportance)}</p>
-      </div>
-      <div>
-        <h5>Scope</h5>
-        <p><strong>Platforms:</strong> ${escapeHtml(area.platforms.join(", ") || "None")}</p>
-        <p><strong>Categories:</strong> ${escapeHtml(area.recommendedCategories.join(", ") || "None")}</p>
-        <p><strong>Priorities:</strong> ${escapeHtml(area.recommendedPriorities.join(", ") || "None")}</p>
-      </div>
-      <div>
-        <h5>Suggested focus</h5>
-        ${renderListHtml(area.suggestedTestFocus)}
-      </div>
-      <div>
-        <h5>Source evidence</h5>
-        ${renderEvidenceHtml(area.sourceEvidence)}
-      </div>
-      <div>
-        <h5>Questions for BA</h5>
-        ${renderListHtml(area.questionsForBA)}
-      </div>
+      <label class="coverage-notes">
+        QA notes for refinement
+        <textarea rows="2" placeholder="Add feedback for this functional area.">${escapeHtml(area.userNotes)}</textarea>
+      </label>
     </div>
-    <label class="coverage-notes">
-      QA notes for refinement
-      <textarea rows="2" placeholder="Add feedback for this functional area.">${escapeHtml(area.userNotes)}</textarea>
-    </label>
   `;
 
   article.querySelector(".coverage-include input").addEventListener("change", (event) => {
@@ -1091,7 +1087,18 @@ function renderCoverageArea(area, index) {
   article.querySelector(".coverage-notes textarea").addEventListener("input", (event) => {
     state.coverageMap.functionalAreas[index].userNotes = event.target.value;
   });
+  article.querySelector(".coverage-toggle").addEventListener("click", () => {
+    const details = article.querySelector(".coverage-area-details");
+    details.classList.toggle("is-hidden");
+  });
   return article;
+}
+
+function renderChips(items) {
+  if (!items || !items.length) {
+    return "";
+  }
+  return items.map((item) => `<span class="coverage-chip">${escapeHtml(item)}</span>`).join("");
 }
 
 function renderInlineList(title, items) {
