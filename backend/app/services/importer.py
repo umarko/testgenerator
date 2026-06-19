@@ -19,8 +19,8 @@ def mock_import(request: ImportRequest) -> ImportResponse:
         status="mock-imported",
         message=(
             f"{len(created)} test cases are ready for Azure DevOps plan "
-            f"{request.target.test_plan_id}, suite {request.target.test_suite_id}."
+            f"{request.target.test_plan_id}, suite {request.target.test_suite_id}, "
+            f"linked to work item {request.source_work_item_id}."
         ),
         createdTestCases=created,
     )
-

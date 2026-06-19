@@ -147,6 +147,23 @@
 
           <div class="coverage-summary" id="coverageSummary"></div>
 
+          <section class="ai-context-panel">
+            <div class="ai-context-heading">
+              <div>
+                <h4>AI context preview</h4>
+                <p>Preview the source and approved coverage inputs before sending them to AI.</p>
+              </div>
+              <button class="compact-action" id="toggleAiContextButton" type="button" aria-expanded="false">Details</button>
+            </div>
+            <div class="ai-context-details is-hidden" id="aiContextDetails">
+              <div class="ai-context-actions">
+                <button class="compact-action is-active" id="previewCoverageContextButton" type="button">Coverage map</button>
+                <button class="compact-action" id="previewTestContextButton" type="button">Test generation</button>
+              </div>
+              <pre id="aiContextPreview"></pre>
+            </div>
+          </section>
+
           <div class="coverage-map-list" id="coverageMapList"></div>
 
           <section class="coverage-refinement-panel">
@@ -358,6 +375,10 @@
               <label>
                 Test Plan ID
                 <input id="testPlanId" name="testPlanId" type="number" value="68397" min="1">
+              </label>
+              <label>
+                Link Work Item ID
+                <input id="linkWorkItemId" name="linkWorkItemId" type="number" value="67191" min="1">
               </label>
               <label>
                 Web Suite ID

@@ -532,12 +532,61 @@ textarea:focus {
 }
 
 .coverage-summary,
+.ai-context-panel,
 .coverage-refinement-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-2);
   padding: 12px;
   margin-bottom: 12px;
+}
+
+.ai-context-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.ai-context-heading h4,
+.ai-context-heading p {
+  margin: 0;
+}
+
+.ai-context-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.ai-context-details {
+  margin-top: 10px;
+}
+
+.ai-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-context-actions .is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#aiContextPreview {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  max-height: 280px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
 }
 
 .coverage-map-list {
@@ -786,7 +835,7 @@ textarea:focus {
 
 .azure-target-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
   gap: 10px;
 }
 

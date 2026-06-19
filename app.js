@@ -41,7 +41,8 @@ const state = {
     }
   },
   revisions: [],
-  latestDiff: null
+  latestDiff: null,
+  aiContextPreviewMode: "coverage"
 };
 
 const PAGE_SIZE = 25;
@@ -94,6 +95,11 @@ const elements = {
   attachmentList: document.querySelector("#attachmentList"),
   coverageSummary: document.querySelector("#coverageSummary"),
   coverageMapList: document.querySelector("#coverageMapList"),
+  toggleAiContextButton: document.querySelector("#toggleAiContextButton"),
+  aiContextDetails: document.querySelector("#aiContextDetails"),
+  previewCoverageContextButton: document.querySelector("#previewCoverageContextButton"),
+  previewTestContextButton: document.querySelector("#previewTestContextButton"),
+  aiContextPreview: document.querySelector("#aiContextPreview"),
   resultSummary: document.querySelector("#resultSummary"),
   resultList: document.querySelector("#resultList")
 };
@@ -187,6 +193,7 @@ function readImportTarget() {
   };
   return {
     testPlanId: document.querySelector("#testPlanId").value.trim(),
+    linkWorkItemId: document.querySelector("#linkWorkItemId").value.trim(),
     testSuiteId: suiteIdsByPlatform.Web,
     suiteIdsByPlatform
   };
@@ -566,6 +573,10 @@ async function importStory() {
     const story = await requestBackendStory(source.storyId);
     document.querySelector("#storyTitle").value = story.title || "";
     document.querySelector("#acceptanceCriteria").value = story.acceptanceCriteria || story.description || "";
+    const linkWorkItemInput = document.querySelector("#linkWorkItemId");
+    if (!linkWorkItemInput.value.trim()) {
+      linkWorkItemInput.value = story.id || source.storyId;
+    }
     state.attachments = story.attachments || [];
     renderAttachments();
     setStoryImported(true, `Imported ${story.workItemType} #${story.id}: ${story.title}`);
@@ -1005,6 +1016,7 @@ function applyCoverageMapResponse(response) {
 function renderCoverageMap() {
   const coverageMap = state.coverageMap;
   elements.coverageMapList.replaceChildren();
+  refreshAiContextPreview();
   if (!coverageMap) {
     elements.coverageSummary.innerHTML = "<strong>No coverage map yet.</strong><p>Generate a coverage map from the Source step.</p>";
     elements.generateTestsFromCoverageButton.disabled = true;
@@ -1023,6 +1035,114 @@ function renderCoverageMap() {
   coverageMap.functionalAreas.forEach((area, index) => {
     elements.coverageMapList.appendChild(renderCoverageArea(area, index));
   });
+  refreshAiContextPreview();
+}
+
+function toggleAiContextDetails() {
+  const willOpen = elements.aiContextDetails.classList.contains("is-hidden");
+  elements.aiContextDetails.classList.toggle("is-hidden", !willOpen);
+  elements.toggleAiContextButton.setAttribute("aria-expanded", String(willOpen));
+  elements.toggleAiContextButton.textContent = willOpen ? "Hide" : "Details";
+  if (willOpen) {
+    refreshAiContextPreview();
+  }
+}
+
+function setAiContextPreviewMode(mode) {
+  state.aiContextPreviewMode = mode;
+  elements.previewCoverageContextButton.classList.toggle("is-active", mode === "coverage");
+  elements.previewTestContextButton.classList.toggle("is-active", mode === "tests");
+  refreshAiContextPreview();
+}
+
+function refreshAiContextPreview() {
+  if (!elements.aiContextDetails.classList.contains("is-hidden")) {
+    elements.aiContextPreview.textContent = buildAiContextPreview(state.aiContextPreviewMode);
+  }
+}
+
+function buildAiContextPreview(mode) {
+  const source = readSource();
+  const lines = [
+    `Mode: ${mode === "tests" ? "Test generation from approved coverage map" : "Coverage map generation"}`,
+    "",
+    "Azure source",
+    `- Organization: ${source.organization || "Not set"}`,
+    `- Project: ${source.project || "Not set"}`,
+    `- Story ID: ${source.storyId || "Not set"}`,
+    "",
+    "Selected generation scope",
+    `- Coverage: ${formatSelectedOptions(source.coverage)}`,
+    `- Priorities: ${formatSelectedOptions(source.priorities).toUpperCase()}`,
+    `- Platforms: ${formatSelectedOptions(source.platforms)}`,
+    "",
+    "Story content",
+    `- Title: ${source.storyTitle || "Not imported"}`,
+    `- Acceptance criteria: ${summarizeLongText(source.acceptanceCriteria)}`,
+    `- Additional context: ${summarizeLongText(source.additionalContext)}`,
+    "",
+    "Included attachments",
+    ...formatAttachmentPreview(source.attachments || [])
+  ];
+
+  if (mode === "tests") {
+    lines.push("", "Approved coverage map", ...formatApprovedCoveragePreview());
+  }
+
+  return lines.join("\n");
+}
+
+function formatApprovedCoveragePreview() {
+  if (!state.coverageMap) {
+    return ["- No coverage map generated yet."];
+  }
+  const approved = buildApprovedCoverageMap(state.coverageMap);
+  const excluded = state.coverageMap.functionalAreas
+    .filter((area) => !area.included)
+    .map((area) => `${area.areaId} ${area.areaName}`);
+  return [
+    `- Summary: ${approved.summary || "No summary."}`,
+    `- Included areas: ${approved.functionalAreas.length}`,
+    ...approved.functionalAreas.map((area) => (
+      `  - ${area.areaId} ${area.areaName} | Risk: ${area.riskLevel} | Categories: ${formatArray(area.recommendedCategories)} | Priorities: ${formatArray(area.recommendedPriorities)} | Platforms: ${formatArray(area.platforms)}`
+    )),
+    `- Excluded areas: ${excluded.length ? excluded.join(" | ") : "None"}`,
+    `- Cross-functional risks: ${formatArray(approved.crossFunctionalRisks)}`,
+    `- Assumptions: ${formatArray(approved.globalAssumptions)}`,
+    `- Questions for BA: ${formatArray(approved.globalQuestionsForBA)}`
+  ];
+}
+
+function formatAttachmentPreview(attachments) {
+  if (!attachments.length) {
+    return ["- None"];
+  }
+  return attachments.map((attachment) => {
+    const text = attachment.text || "";
+    return `- ${attachment.name || "Attachment"} | ${attachment.extractionStatus || "unknown"} | ${text.length} chars | ${summarizeLongText(text, 240)}`;
+  });
+}
+
+function formatSelectedOptions(options) {
+  const selected = Object.entries(options || {})
+    .filter(([, value]) => value)
+    .map(([key]) => key);
+  return selected.length ? selected.join(", ") : "None selected";
+}
+
+function formatArray(items) {
+  return items && items.length ? items.join(", ") : "None";
+}
+
+function summarizeLongText(value, maxLength = 420) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "Not provided";
+  }
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength).trim()}...`;
 }
 
 function renderCoverageArea(area, index) {
@@ -1086,6 +1206,7 @@ function renderCoverageArea(area, index) {
   });
   article.querySelector(".coverage-notes textarea").addEventListener("input", (event) => {
     state.coverageMap.functionalAreas[index].userNotes = event.target.value;
+    refreshAiContextPreview();
   });
   article.querySelector(".coverage-toggle").addEventListener("click", () => {
     const details = article.querySelector(".coverage-area-details");
@@ -1621,6 +1742,9 @@ function validateBeforeImport() {
       errors.push(`${platform} tests need a ${platform} Suite ID before import.`);
     }
   });
+  if (!state.source.linkWorkItemId?.trim()) {
+    errors.push("Link Work Item ID is required before import.");
+  }
   return errors;
 }
 
@@ -1671,6 +1795,7 @@ async function realAzureImport() {
   const confirmed = window.confirm(
     `This will create ${scopedTestCases.length} real Azure DevOps test cases.\n\n` +
       `Story ID: ${state.source.storyId}\n` +
+      `Link Work Item ID: ${state.source.linkWorkItemId}\n` +
       `Test Plan ID: ${state.source.testPlanId}\n` +
       `Suite mapping:\n${formatSuiteMapping(state.source.suiteIdsByPlatform)}\n\n` +
       "Continue with real Azure import?"
@@ -1703,7 +1828,7 @@ async function requestBackendImport(path = "/imports/azure/dry-run") {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      sourceWorkItemId: state.source.storyId,
+      sourceWorkItemId: state.source.linkWorkItemId,
       target: {
         testPlanId: state.source.testPlanId,
         testSuiteId: state.source.testSuiteId,
@@ -1739,7 +1864,7 @@ function renderImportResult(response) {
   elements.resultSummary.innerHTML = `
     <strong>${getImportResultTitle(response, created.length, isDryRun)}</strong>
     <p>${escapeHtml(response.message || "Ready for Azure DevOps import.")}</p>
-    ${isDryRun ? `<p>Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}. ${escapeHtml(formatDryRunSuiteNames(response))}</p>` : ""}
+    ${isDryRun ? `<p>Link work item ${escapeHtml(response.sourceWorkItemId || state.source.linkWorkItemId || "")}. Target plan ${escapeHtml(response.testPlanId)}${response.testPlanName ? ` (${escapeHtml(response.testPlanName)})` : ""}. ${escapeHtml(formatDryRunSuiteNames(response))}</p>` : ""}
   `;
 
   elements.resultList.replaceChildren();
@@ -1825,7 +1950,7 @@ function renderFrontendImportFallback() {
 
   elements.resultSummary.innerHTML = `
     <strong>${created.length} test cases ready for Azure DevOps import.</strong>
-    <p>Target plan ${escapeHtml(state.source.testPlanId)}. ${escapeHtml(formatSuiteMapping(state.source.suiteIdsByPlatform))}</p>
+    <p>Link work item ${escapeHtml(state.source.linkWorkItemId || "")}. Target plan ${escapeHtml(state.source.testPlanId)}. ${escapeHtml(formatSuiteMapping(state.source.suiteIdsByPlatform))}</p>
   `;
 
   elements.resultList.replaceChildren();
@@ -1964,6 +2089,7 @@ function writeSourceControls(source) {
 
 function writeImportTargetControls(source) {
   document.querySelector("#testPlanId").value = source.testPlanId || "";
+  document.querySelector("#linkWorkItemId").value = source.linkWorkItemId || source.storyId || "";
   document.querySelector("#webSuiteId").value = source.suiteIdsByPlatform?.Web || "";
   document.querySelector("#androidSuiteId").value = source.suiteIdsByPlatform?.Android || "";
   document.querySelector("#iosSuiteId").value = source.suiteIdsByPlatform?.iOS || "";
@@ -2104,6 +2230,9 @@ elements.importStoryButton.addEventListener("click", importStory);
 elements.generateButton.addEventListener("click", generateCoverageMap);
 elements.generateTestsFromCoverageButton.addEventListener("click", generateTestsFromCoverageMap);
 elements.refineCoverageButton.addEventListener("click", refineCoverageMap);
+elements.toggleAiContextButton.addEventListener("click", toggleAiContextDetails);
+elements.previewCoverageContextButton.addEventListener("click", () => setAiContextPreviewMode("coverage"));
+elements.previewTestContextButton.addEventListener("click", () => setAiContextPreviewMode("tests"));
 elements.resetButton.addEventListener("click", resetDraft);
 elements.saveDraftButton.addEventListener("click", saveLocalDraft);
 elements.loadDraftButton.addEventListener("click", loadLocalDraft);
@@ -2165,6 +2294,7 @@ elements.nextPageButton.addEventListener("click", () => {
 
 [
   "testPlanId",
+  "linkWorkItemId",
   "webSuiteId",
   "androidSuiteId",
   "iosSuiteId",

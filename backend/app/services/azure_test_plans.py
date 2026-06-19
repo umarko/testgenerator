@@ -139,10 +139,10 @@ def _validate_request(request: ImportRequest) -> list[DryRunValidation]:
     validations = []
     validations.append(
         _validation(
-            "Source story",
+            "Link Work Item",
             bool(request.source_work_item_id.strip()),
-            f"Source work item #{request.source_work_item_id} will be linked to each test case.",
-            "Source Work Item ID is missing.",
+            f"Work item #{request.source_work_item_id} will be linked to each test case.",
+            "Link Work Item ID is missing.",
         )
     )
     validations.append(
